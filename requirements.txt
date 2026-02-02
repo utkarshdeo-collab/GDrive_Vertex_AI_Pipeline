@@ -1,0 +1,15 @@
+# Document Pipeline — Phase 1 and shared
+google-cloud-storage>=2.0.0
+google-cloud-documentai>=2.20.0
+google-auth>=2.0.0
+google-api-python-client>=2.0.0
+
+# Phase 2/3 (Vertex AI embeddings, index)
+google-cloud-aiplatform>=1.35.0
+
+# Phase 4 ADK (Agent Development Kit)
+google-adk>=1.5.0
+
+# Optional: local-only Phase 1 fallback (phase1_local_ingest.py)
+# PyMuPDF>=1.23.0
+# pdfplumber>=0.10.0

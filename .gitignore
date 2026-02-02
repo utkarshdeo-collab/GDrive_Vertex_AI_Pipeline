@@ -1,0 +1,14 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local/temp files
+chunks.jsonl
+*.log
+embeddings_partial.jsonl
+
+# Sensitive (if any)
+.env
+credentials.json
