@@ -1,0 +1,1973 @@
+{
+  "project_id": "sym-dev-mr-agents-01",
+  "datasets": [
+    {
+      "dataset_id": "nexus_data",
+      "tables": [
+        {
+          "table_id": "sf_account_info",
+          "row_count": 2,
+          "schema": [
+            {
+              "column_name": "Salesforce_Account_ID",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Account_Owner",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Contract_End_Date",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Total_ARR",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Client_Engagement_Lead",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Renewal_Date",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Customer_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Contracted_Num_Licenses",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Firm_ID",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            }
+          ],
+          "sample_rows": [
+            {
+              "Salesforce_Account_ID": "001We00000UrUEpIAN",
+              "Account_Owner": "Nikhil Ghanta",
+              "Contract_End_Date": null,
+              "Total_ARR": 0.0,
+              "Client_Engagement_Lead": null,
+              "Renewal_Date": null,
+              "Customer_Name": "ABC Capital",
+              "Contracted_Num_Licenses": 0.0,
+              "Firm_ID": null
+            },
+            {
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "Account_Owner": "Nikhil Ghanta",
+              "Contract_End_Date": null,
+              "Total_ARR": 61200.0,
+              "Client_Engagement_Lead": null,
+              "Renewal_Date": null,
+              "Customer_Name": "Antino Bank",
+              "Contracted_Num_Licenses": 0.0,
+              "Firm_ID": 2266.0
+            }
+          ]
+        },
+        {
+          "table_id": "sf_account_info_abc",
+          "row_count": 1,
+          "schema": [
+            {
+              "column_name": "Account_Owner",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Account_ID",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Pipeline_ARR",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Contract_End_Date",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Client_Engagement_Lead",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Customer_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Onboarding_Lead",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Contracted_ARR",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            }
+          ],
+          "sample_rows": [
+            {
+              "Account_Owner": "Nikhil Ghanta",
+              "Account_ID": "001We00000UrUEpIAN",
+              "Pipeline_ARR": 57600.0,
+              "Contract_End_Date": null,
+              "Client_Engagement_Lead": null,
+              "Customer_Name": "ABC Capital",
+              "Onboarding_Lead": null,
+              "Contracted_ARR": null
+            }
+          ]
+        },
+        {
+          "table_id": "sf_opportunity_detailed",
+          "row_count": 7,
+          "schema": [
+            {
+              "column_name": "Netsuite_Link",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Contract_End_Date",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Netsuite_SO_ID",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Bill_Start_Date",
+              "data_type": "DATE",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Billing_Entity",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Contracted_ARR",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Connection_Num_C_Number",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Probability_Pct",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Currency",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Salesforce_Account_ID",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "C9_Users_Commit__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "CloseDate",
+              "data_type": "DATE",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Salesforce_Opportunity_ID",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "C9_Users_Pipeline__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Order_Type_Product",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Opportunity_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Contracted_Licenses",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Owner_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Current_Stage",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            }
+          ],
+          "sample_rows": [
+            {
+              "Netsuite_Link": null,
+              "Contract_End_Date": null,
+              "Netsuite_SO_ID": null,
+              "Bill_Start_Date": "2026-01-16",
+              "Billing_Entity": null,
+              "Contracted_ARR": null,
+              "Connection_Num_C_Number": "C146616",
+              "Probability_Pct": 100.0,
+              "Currency": "USD",
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "C9_Users_Commit__c": 0.0,
+              "CloseDate": "2025-08-31",
+              "Salesforce_Opportunity_ID": "006We00000JebfRIAR",
+              "C9_Users_Pipeline__c": 0.0,
+              "Order_Type_Product": "C9 Trader Full (Standard)",
+              "Opportunity_Name": "200 Trader users",
+              "Contracted_Licenses": 200.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Current_Stage": "Closed Won - In Billing"
+            },
+            {
+              "Netsuite_Link": null,
+              "Contract_End_Date": null,
+              "Netsuite_SO_ID": null,
+              "Bill_Start_Date": "2026-01-16",
+              "Billing_Entity": null,
+              "Contracted_ARR": null,
+              "Connection_Num_C_Number": "C146617",
+              "Probability_Pct": 100.0,
+              "Currency": "USD",
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "C9_Users_Commit__c": 0.0,
+              "CloseDate": "2025-09-30",
+              "Salesforce_Opportunity_ID": "006We00000JebnVIAR",
+              "C9_Users_Pipeline__c": 0.0,
+              "Order_Type_Product": "Lite Plus",
+              "Opportunity_Name": "100 Desk+ users",
+              "Contracted_Licenses": 100.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Current_Stage": "Closed Won - In Billing"
+            },
+            {
+              "Netsuite_Link": null,
+              "Contract_End_Date": null,
+              "Netsuite_SO_ID": null,
+              "Bill_Start_Date": "2026-01-16",
+              "Billing_Entity": null,
+              "Contracted_ARR": null,
+              "Connection_Num_C_Number": "C146618",
+              "Probability_Pct": 100.0,
+              "Currency": "USD",
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "C9_Users_Commit__c": 0.0,
+              "CloseDate": "2025-10-31",
+              "Salesforce_Opportunity_ID": "006We00000JebqjIAB",
+              "C9_Users_Pipeline__c": 0.0,
+              "Order_Type_Product": "Intercom",
+              "Opportunity_Name": "50 Desk users",
+              "Contracted_Licenses": 50.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Current_Stage": "Closed Won - In Billing"
+            },
+            {
+              "Netsuite_Link": null,
+              "Contract_End_Date": null,
+              "Netsuite_SO_ID": null,
+              "Bill_Start_Date": "2026-01-16",
+              "Billing_Entity": null,
+              "Contracted_ARR": null,
+              "Connection_Num_C_Number": "C146619",
+              "Probability_Pct": 80.0,
+              "Currency": "USD",
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "C9_Users_Commit__c": 50.0,
+              "CloseDate": "2026-04-01",
+              "Salesforce_Opportunity_ID": "006We00000Jec3dIAB",
+              "C9_Users_Pipeline__c": 0.0,
+              "Order_Type_Product": "Intercom",
+              "Opportunity_Name": "50 Desk users",
+              "Contracted_Licenses": 0.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Current_Stage": "Committed to Bill - 80%"
+            },
+            {
+              "Netsuite_Link": null,
+              "Contract_End_Date": null,
+              "Netsuite_SO_ID": null,
+              "Bill_Start_Date": "2026-01-16",
+              "Billing_Entity": null,
+              "Contracted_ARR": null,
+              "Connection_Num_C_Number": "C146620",
+              "Probability_Pct": 60.0,
+              "Currency": "USD",
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "C9_Users_Commit__c": 0.0,
+              "CloseDate": "2026-01-30",
+              "Salesforce_Opportunity_ID": "006We00000JecGXIAZ",
+              "C9_Users_Pipeline__c": 0.0,
+              "Order_Type_Product": "Hardware Only",
+              "Opportunity_Name": "300 cloudhubs",
+              "Contracted_Licenses": 0.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Current_Stage": "Evaluation/Trial - 60%"
+            }
+          ]
+        },
+        {
+          "table_id": "sf_opportunity_portfolio_abc",
+          "row_count": 1,
+          "schema": [
+            {
+              "column_name": "Internal_ID",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Owner_Full_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "ARR",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Num_New_Licenses",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Forecast_Stage",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Opportunity_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Stage",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Close_Date",
+              "data_type": "DATE",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Type",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            }
+          ],
+          "sample_rows": [
+            {
+              "Internal_ID": "006We00000JecV3IAJ",
+              "Owner_Full_Name": "Nikhil Ghanta",
+              "ARR": null,
+              "Product": "Enterprise License",
+              "Num_New_Licenses": 0.0,
+              "Forecast_Stage": "Upside",
+              "Opportunity_Name": "ABC Capital - New Client - OCT25 - 100 users",
+              "Stage": "4. Negotiation",
+              "Close_Date": "2025-10-30",
+              "Type": "New Client"
+            }
+          ]
+        },
+        {
+          "table_id": "sf_opportunity_products_abc",
+          "row_count": 5,
+          "schema": [
+            {
+              "column_name": "ARR",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Total_Price",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Discount_Pct",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Sales_Price",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Quantity",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Price_PUPM",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            }
+          ],
+          "sample_rows": [
+            {
+              "ARR": null,
+              "Total_Price": 9600.0,
+              "Discount_Pct": null,
+              "Sales_Price": 9600.0,
+              "Quantity": 1.0,
+              "Price_PUPM": 0.0,
+              "Product": "Symphony Entry Fee"
+            },
+            {
+              "ARR": null,
+              "Total_Price": 0.0,
+              "Discount_Pct": null,
+              "Sales_Price": 0.0,
+              "Quantity": 150.0,
+              "Price_PUPM": 0.0,
+              "Product": "1 Federation Product Users"
+            },
+            {
+              "ARR": null,
+              "Total_Price": 24000.0,
+              "Discount_Pct": null,
+              "Sales_Price": 240.0,
+              "Quantity": 100.0,
+              "Price_PUPM": 0.0,
+              "Product": "SMS Direct & Whatsapp Direct - Umony Number"
+            },
+            {
+              "ARR": null,
+              "Total_Price": 12000.0,
+              "Discount_Pct": null,
+              "Sales_Price": 240.0,
+              "Quantity": 50.0,
+              "Price_PUPM": 0.0,
+              "Product": "WhatsApp Direct Lines - Umony Number"
+            },
+            {
+              "ARR": null,
+              "Total_Price": 48000.0,
+              "Discount_Pct": null,
+              "Sales_Price": 480.0,
+              "Quantity": 100.0,
+              "Price_PUPM": 40.0,
+              "Product": "Symphony Prod License"
+            }
+          ]
+        },
+        {
+          "table_id": "sf_portfolio_summary",
+          "row_count": 7,
+          "schema": [
+            {
+              "column_name": "Salesforce_Account_ID",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Num_New_Licenses",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Owner_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Close_Date",
+              "data_type": "DATE",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Opportunity_Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Stage",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product_Type",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Connection_Num",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            }
+          ],
+          "sample_rows": [
+            {
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "Num_New_Licenses": 200.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Close_Date": "2025-08-31",
+              "Opportunity_Name": "200 Trader users",
+              "Stage": "Closed Won - In Billing",
+              "Product_Type": "C9 Trader Full (Standard)",
+              "Connection_Num": "C146616"
+            },
+            {
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "Num_New_Licenses": 100.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Close_Date": "2025-09-30",
+              "Opportunity_Name": "100 Desk+ users",
+              "Stage": "Closed Won - In Billing",
+              "Product_Type": "Lite Plus",
+              "Connection_Num": "C146617"
+            },
+            {
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "Num_New_Licenses": 50.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Close_Date": "2025-10-31",
+              "Opportunity_Name": "50 Desk users",
+              "Stage": "Closed Won - In Billing",
+              "Product_Type": "Intercom",
+              "Connection_Num": "C146618"
+            },
+            {
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "Num_New_Licenses": 50.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Close_Date": "2026-04-01",
+              "Opportunity_Name": "50 Desk users",
+              "Stage": "Committed to Bill - 80%",
+              "Product_Type": "Intercom",
+              "Connection_Num": "C146619"
+            },
+            {
+              "Salesforce_Account_ID": "001We00000Us5ENIAZ",
+              "Num_New_Licenses": 0.0,
+              "Owner_Name": "Nikhil Ghanta",
+              "Close_Date": "2026-01-30",
+              "Opportunity_Name": "300 cloudhubs",
+              "Stage": "Evaluation/Trial - 60%",
+              "Product_Type": "Hardware Only",
+              "Connection_Num": "C146620"
+            }
+          ]
+        },
+        {
+          "table_id": "sf_product_full_discovery_abc",
+          "row_count": 5,
+          "schema": [
+            {
+              "column_name": "Product_Name_Extracted",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Priority_Rating__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Sponsored_Access_Network_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Other_Archiving_Platform__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Opp_Record_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Client_Engagement_Lead__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Jira_Assignee_Email__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Jira_Assignee__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Archiving_User_First_Name__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Onboarding_Duration__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Deployment_Duration__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Deployment_Start_Date__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Legal_Name__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "ARR__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Onboarding_Comments__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "JIRA_Latest_Update__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Onboarding_Lead__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "PricebookEntryId",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "X3_Fed_Overage_Price__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "X2_Fed_Overage__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "CS_Onboarding_Stage__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "UnitPrice",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Monthly_Update_Check__c",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_SMS_for_Aff_Marketing_Lead_Gen__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "LastModifiedById",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Account_Number__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Yearly__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "OpportunityId",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Account_Pin__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Turn_off_voicemail__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Monthly__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "LastModifiedDate",
+              "data_type": "TIMESTAMP",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Firm_Legal_Address__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Overage_Price__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Post_Sale_Status__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Type_of_Legal_Firm__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Voice_Route_URL__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "IsDeleted",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Remove_Discount__c",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Tier__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Firm_Phone_Number__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Tax_number_ID_EIN__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Quantity",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Parent_PS_JIRA_ticket__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Amenity_Opp_Product_ID__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Professional_Services_Time__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product_Name__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Phone_numbers_to_Port__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Archiving_User_Email__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Account_ID__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "JIRA_ticket__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Tech_Start_Date__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Deliver_to_Umony__c",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Onboarding_Stage_Completed_On__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Network_telco_provider__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Opportunity_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Pass_Through_Fees_Federated__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Overage_Comments__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Federated_Overage_Limit__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Opportunity_Hardware_Order_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Account_Name__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "ServiceDate",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Archiving__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "HasQuantitySchedule",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Customer_Environment__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Federated_Products__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Do_Not_Call__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Discount",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Order_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Opportunity_Product_ID__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Price_PUPM__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "ProductCode",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product_Campaign__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Override_ARR__c",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product_Family__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Firm_Email_Address__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Name",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Billing_Schedule__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "ConnectionReceivedId",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "CurrencyIsoCode",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Federated_Overage_Model__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "LastReferencedDate",
+              "data_type": "TIMESTAMP",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Status__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "TotalPrice",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "CreatedById",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Promotional_Licenses__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Federated_Overage_Waived_Until__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "CreatedDate",
+              "data_type": "TIMESTAMP",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "CanUseRevenueSchedule",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Vertical_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Description",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "HasSchedule",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "MRR__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "SystemModstamp",
+              "data_type": "TIMESTAMP",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Jira_Status__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Archiving_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Archiving_User_Last_Name__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "ListPrice",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Do_Not_Record__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "HasRevenueSchedule",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Technical_Implementation_Lead__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "LastViewedDate",
+              "data_type": "TIMESTAMP",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Discount__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Id",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Create_JIRA__c",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "CanUseQuantitySchedule",
+              "data_type": "BOOLEAN",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "User_Month__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Request_Type__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Turn_off_voicemail_list__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product_Code_copy__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "SortOrder",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Umony_Authorized_User_Name__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Weighted_ARR__c",
+              "data_type": "FLOAT",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Federated_Overage_Waiver_Start_Date__c",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "ConnectionSentId",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            },
+            {
+              "column_name": "Product2Id",
+              "data_type": "STRING",
+              "mode": "NULLABLE",
+              "description": null
+            }
+          ],
+          "sample_rows": [
+            {
+              "Product_Name_Extracted": "Symphony Entry Fee",
+              "Priority_Rating__c": null,
+              "Sponsored_Access_Network_Type__c": null,
+              "Umony_Other_Archiving_Platform__c": null,
+              "Opp_Record_Type__c": "0125c000000sDMm",
+              "Client_Engagement_Lead__c": null,
+              "Jira_Assignee_Email__c": null,
+              "Jira_Assignee__c": null,
+              "Archiving_User_First_Name__c": null,
+              "Onboarding_Duration__c": null,
+              "Deployment_Duration__c": 0.0,
+              "Deployment_Start_Date__c": null,
+              "Umony_Legal_Name__c": null,
+              "ARR__c": null,
+              "Onboarding_Comments__c": null,
+              "JIRA_Latest_Update__c": null,
+              "Onboarding_Lead__c": null,
+              "PricebookEntryId": "01u5c00000GeJOaAAN",
+              "X3_Fed_Overage_Price__c": null,
+              "X2_Fed_Overage__c": null,
+              "CS_Onboarding_Stage__c": null,
+              "UnitPrice": 9600.0,
+              "Monthly_Update_Check__c": false,
+              "Umony_SMS_for_Aff_Marketing_Lead_Gen__c": null,
+              "LastModifiedById": "005o0000004EPuxAAG",
+              "Umony_Account_Number__c": null,
+              "Yearly__c": null,
+              "OpportunityId": "006We00000JecV3IAJ",
+              "Umony_Account_Pin__c": null,
+              "Turn_off_voicemail__c": null,
+              "Monthly__c": null,
+              "LastModifiedDate": "2026-01-16 17:59:15+00:00",
+              "Umony_Firm_Legal_Address__c": null,
+              "Overage_Price__c": null,
+              "Post_Sale_Status__c": "TAM WIP",
+              "Umony_Type_of_Legal_Firm__c": null,
+              "Umony_Voice_Route_URL__c": null,
+              "IsDeleted": false,
+              "Remove_Discount__c": false,
+              "Tier__c": 3.0,
+              "Umony_Firm_Phone_Number__c": null,
+              "Umony_Tax_number_ID_EIN__c": null,
+              "Quantity": 1.0,
+              "Parent_PS_JIRA_ticket__c": null,
+              "Amenity_Opp_Product_ID__c": null,
+              "Professional_Services_Time__c": 64.0,
+              "Product_Name__c": "Symphony Entry Fee",
+              "Umony_Phone_numbers_to_Port__c": null,
+              "Archiving_User_Email__c": null,
+              "Account_ID__c": "001We00000UrUEp",
+              "JIRA_ticket__c": null,
+              "Tech_Start_Date__c": null,
+              "Deliver_to_Umony__c": false,
+              "Onboarding_Stage_Completed_On__c": null,
+              "Umony_Network_telco_provider__c": null,
+              "Opportunity_Type__c": "New Client",
+              "Pass_Through_Fees_Federated__c": null,
+              "Overage_Comments__c": null,
+              "Federated_Overage_Limit__c": null,
+              "Opportunity_Hardware_Order_Type__c": null,
+              "Umony__c": null,
+              "Account_Name__c": "ABC Capital",
+              "ServiceDate": null,
+              "Umony_Archiving__c": null,
+              "HasQuantitySchedule": false,
+              "Customer_Environment__c": null,
+              "Federated_Products__c": null,
+              "Umony_Do_Not_Call__c": null,
+              "Discount": null,
+              "Umony_Order_Type__c": null,
+              "Opportunity_Product_ID__c": "00kWe000005DPYn",
+              "Price_PUPM__c": 0.0,
+              "ProductCode": "SYM-002",
+              "Product_Campaign__c": "User Licenses",
+              "Override_ARR__c": false,
+              "Product_Family__c": "Messaging",
+              "Umony_Firm_Email_Address__c": null,
+              "Name": "ABC Capital - New Client - OCT25 - 100 users Symphony Entry Fee",
+              "Billing_Schedule__c": null,
+              "ConnectionReceivedId": null,
+              "CurrencyIsoCode": "USD",
+              "Federated_Overage_Model__c": null,
+              "LastReferencedDate": null,
+              "Status__c": "Active",
+              "TotalPrice": 9600.0,
+              "CreatedById": "005o0000004EPuxAAG",
+              "Promotional_Licenses__c": null,
+              "Federated_Overage_Waived_Until__c": null,
+              "CreatedDate": "2026-01-16 17:59:15+00:00",
+              "CanUseRevenueSchedule": false,
+              "Umony_Vertical_Type__c": "Financial Services",
+              "Description": null,
+              "HasSchedule": false,
+              "MRR__c": 800.0,
+              "SystemModstamp": "2026-01-16 17:59:15+00:00",
+              "Jira_Status__c": null,
+              "Umony_Archiving_Type__c": null,
+              "Archiving_User_Last_Name__c": null,
+              "ListPrice": 9600.0,
+              "Umony_Do_Not_Record__c": null,
+              "HasRevenueSchedule": false,
+              "Technical_Implementation_Lead__c": null,
+              "LastViewedDate": null,
+              "Discount__c": 0.0,
+              "Id": "00kWe000005DPYnIAO",
+              "Create_JIRA__c": false,
+              "CanUseQuantitySchedule": false,
+              "User_Month__c": 0.0,
+              "Umony_Request_Type__c": "Provisioning",
+              "Turn_off_voicemail_list__c": null,
+              "Product_Code_copy__c": "SYM-002",
+              "SortOrder": null,
+              "Umony_Authorized_User_Name__c": null,
+              "Weighted_ARR__c": 7680.0,
+              "Federated_Overage_Waiver_Start_Date__c": null,
+              "ConnectionSentId": null,
+              "Product2Id": "01t5c00000DajI1AAJ"
+            },
+            {
+              "Product_Name_Extracted": "Symphony Prod License",
+              "Priority_Rating__c": null,
+              "Sponsored_Access_Network_Type__c": null,
+              "Umony_Other_Archiving_Platform__c": null,
+              "Opp_Record_Type__c": "0125c000000sDMm",
+              "Client_Engagement_Lead__c": null,
+              "Jira_Assignee_Email__c": null,
+              "Jira_Assignee__c": null,
+              "Archiving_User_First_Name__c": null,
+              "Onboarding_Duration__c": null,
+              "Deployment_Duration__c": 0.0,
+              "Deployment_Start_Date__c": null,
+              "Umony_Legal_Name__c": null,
+              "ARR__c": null,
+              "Onboarding_Comments__c": null,
+              "JIRA_Latest_Update__c": null,
+              "Onboarding_Lead__c": null,
+              "PricebookEntryId": "01u5c00000GeJOfAAN",
+              "X3_Fed_Overage_Price__c": null,
+              "X2_Fed_Overage__c": null,
+              "CS_Onboarding_Stage__c": null,
+              "UnitPrice": 480.0,
+              "Monthly_Update_Check__c": false,
+              "Umony_SMS_for_Aff_Marketing_Lead_Gen__c": null,
+              "LastModifiedById": "005o0000004EPuxAAG",
+              "Umony_Account_Number__c": null,
+              "Yearly__c": null,
+              "OpportunityId": "006We00000JecV3IAJ",
+              "Umony_Account_Pin__c": null,
+              "Turn_off_voicemail__c": null,
+              "Monthly__c": null,
+              "LastModifiedDate": "2026-01-16 17:59:15+00:00",
+              "Umony_Firm_Legal_Address__c": null,
+              "Overage_Price__c": null,
+              "Post_Sale_Status__c": "TAM WIP",
+              "Umony_Type_of_Legal_Firm__c": null,
+              "Umony_Voice_Route_URL__c": null,
+              "IsDeleted": false,
+              "Remove_Discount__c": false,
+              "Tier__c": 3.0,
+              "Umony_Firm_Phone_Number__c": null,
+              "Umony_Tax_number_ID_EIN__c": null,
+              "Quantity": 100.0,
+              "Parent_PS_JIRA_ticket__c": null,
+              "Amenity_Opp_Product_ID__c": null,
+              "Professional_Services_Time__c": 320.0,
+              "Product_Name__c": "Symphony Prod License",
+              "Umony_Phone_numbers_to_Port__c": null,
+              "Archiving_User_Email__c": null,
+              "Account_ID__c": "001We00000UrUEp",
+              "JIRA_ticket__c": null,
+              "Tech_Start_Date__c": null,
+              "Deliver_to_Umony__c": false,
+              "Onboarding_Stage_Completed_On__c": null,
+              "Umony_Network_telco_provider__c": null,
+              "Opportunity_Type__c": "New Client",
+              "Pass_Through_Fees_Federated__c": null,
+              "Overage_Comments__c": null,
+              "Federated_Overage_Limit__c": null,
+              "Opportunity_Hardware_Order_Type__c": null,
+              "Umony__c": null,
+              "Account_Name__c": "ABC Capital",
+              "ServiceDate": null,
+              "Umony_Archiving__c": null,
+              "HasQuantitySchedule": false,
+              "Customer_Environment__c": null,
+              "Federated_Products__c": null,
+              "Umony_Do_Not_Call__c": null,
+              "Discount": null,
+              "Umony_Order_Type__c": null,
+              "Opportunity_Product_ID__c": "00kWe000005DPYo",
+              "Price_PUPM__c": 40.0,
+              "ProductCode": "SYM-001",
+              "Product_Campaign__c": "User Licenses",
+              "Override_ARR__c": false,
+              "Product_Family__c": "Messaging",
+              "Umony_Firm_Email_Address__c": null,
+              "Name": "ABC Capital - New Client - OCT25 - 100 users Symphony Prod License",
+              "Billing_Schedule__c": null,
+              "ConnectionReceivedId": null,
+              "CurrencyIsoCode": "USD",
+              "Federated_Overage_Model__c": null,
+              "LastReferencedDate": "2026-01-21 09:22:08+00:00",
+              "Status__c": "Active",
+              "TotalPrice": 48000.0,
+              "CreatedById": "005o0000004EPuxAAG",
+              "Promotional_Licenses__c": null,
+              "Federated_Overage_Waived_Until__c": null,
+              "CreatedDate": "2026-01-16 17:59:15+00:00",
+              "CanUseRevenueSchedule": false,
+              "Umony_Vertical_Type__c": "Financial Services",
+              "Description": null,
+              "HasSchedule": false,
+              "MRR__c": 4000.0,
+              "SystemModstamp": "2026-01-16 17:59:15+00:00",
+              "Jira_Status__c": null,
+              "Umony_Archiving_Type__c": null,
+              "Archiving_User_Last_Name__c": null,
+              "ListPrice": 480.0,
+              "Umony_Do_Not_Record__c": null,
+              "HasRevenueSchedule": false,
+              "Technical_Implementation_Lead__c": null,
+              "LastViewedDate": "2026-01-21 09:22:08+00:00",
+              "Discount__c": 0.0,
+              "Id": "00kWe000005DPYoIAO",
+              "Create_JIRA__c": false,
+              "CanUseQuantitySchedule": false,
+              "User_Month__c": 0.0,
+              "Umony_Request_Type__c": "Provisioning",
+              "Turn_off_voicemail_list__c": null,
+              "Product_Code_copy__c": "SYM-001",
+              "SortOrder": null,
+              "Umony_Authorized_User_Name__c": null,
+              "Weighted_ARR__c": 38400.0,
+              "Federated_Overage_Waiver_Start_Date__c": null,
+              "ConnectionSentId": null,
+              "Product2Id": "01t1J00000BeE9AQAV"
+            },
+            {
+              "Product_Name_Extracted": "1 Federation Product Users",
+              "Priority_Rating__c": null,
+              "Sponsored_Access_Network_Type__c": null,
+              "Umony_Other_Archiving_Platform__c": null,
+              "Opp_Record_Type__c": "0125c000000sDMm",
+              "Client_Engagement_Lead__c": null,
+              "Jira_Assignee_Email__c": null,
+              "Jira_Assignee__c": null,
+              "Archiving_User_First_Name__c": null,
+              "Onboarding_Duration__c": null,
+              "Deployment_Duration__c": 0.0,
+              "Deployment_Start_Date__c": null,
+              "Umony_Legal_Name__c": null,
+              "ARR__c": null,
+              "Onboarding_Comments__c": null,
+              "JIRA_Latest_Update__c": null,
+              "Onboarding_Lead__c": null,
+              "PricebookEntryId": "01u5c00000HSLCfAAP",
+              "X3_Fed_Overage_Price__c": null,
+              "X2_Fed_Overage__c": null,
+              "CS_Onboarding_Stage__c": null,
+              "UnitPrice": 0.0,
+              "Monthly_Update_Check__c": false,
+              "Umony_SMS_for_Aff_Marketing_Lead_Gen__c": null,
+              "LastModifiedById": "005o0000004EPuxAAG",
+              "Umony_Account_Number__c": null,
+              "Yearly__c": null,
+              "OpportunityId": "006We00000JecV3IAJ",
+              "Umony_Account_Pin__c": null,
+              "Turn_off_voicemail__c": null,
+              "Monthly__c": null,
+              "LastModifiedDate": "2026-01-16 18:00:23+00:00",
+              "Umony_Firm_Legal_Address__c": null,
+              "Overage_Price__c": null,
+              "Post_Sale_Status__c": "TAM WIP",
+              "Umony_Type_of_Legal_Firm__c": null,
+              "Umony_Voice_Route_URL__c": null,
+              "IsDeleted": false,
+              "Remove_Discount__c": false,
+              "Tier__c": 3.0,
+              "Umony_Firm_Phone_Number__c": null,
+              "Umony_Tax_number_ID_EIN__c": null,
+              "Quantity": 150.0,
+              "Parent_PS_JIRA_ticket__c": null,
+              "Amenity_Opp_Product_ID__c": null,
+              "Professional_Services_Time__c": 0.0,
+              "Product_Name__c": "1 Federation Product Users",
+              "Umony_Phone_numbers_to_Port__c": null,
+              "Archiving_User_Email__c": null,
+              "Account_ID__c": "001We00000UrUEp",
+              "JIRA_ticket__c": null,
+              "Tech_Start_Date__c": null,
+              "Deliver_to_Umony__c": false,
+              "Onboarding_Stage_Completed_On__c": null,
+              "Umony_Network_telco_provider__c": null,
+              "Opportunity_Type__c": "New Client",
+              "Pass_Through_Fees_Federated__c": null,
+              "Overage_Comments__c": null,
+              "Federated_Overage_Limit__c": null,
+              "Opportunity_Hardware_Order_Type__c": null,
+              "Umony__c": null,
+              "Account_Name__c": "ABC Capital",
+              "ServiceDate": null,
+              "Umony_Archiving__c": null,
+              "HasQuantitySchedule": false,
+              "Customer_Environment__c": null,
+              "Federated_Products__c": null,
+              "Umony_Do_Not_Call__c": null,
+              "Discount": null,
+              "Umony_Order_Type__c": null,
+              "Opportunity_Product_ID__c": "00kWe000005DPc1",
+              "Price_PUPM__c": 0.0,
+              "ProductCode": null,
+              "Product_Campaign__c": "Federation",
+              "Override_ARR__c": false,
+              "Product_Family__c": "Messaging",
+              "Umony_Firm_Email_Address__c": null,
+              "Name": "ABC Capital - New Client - OCT25 - 100 users 1 Federation Product Users",
+              "Billing_Schedule__c": null,
+              "ConnectionReceivedId": null,
+              "CurrencyIsoCode": "USD",
+              "Federated_Overage_Model__c": null,
+              "LastReferencedDate": "2026-01-21 10:02:07+00:00",
+              "Status__c": "Active",
+              "TotalPrice": 0.0,
+              "CreatedById": "005o0000004EPuxAAG",
+              "Promotional_Licenses__c": null,
+              "Federated_Overage_Waived_Until__c": null,
+              "CreatedDate": "2026-01-16 18:00:23+00:00",
+              "CanUseRevenueSchedule": false,
+              "Umony_Vertical_Type__c": "Financial Services",
+              "Description": null,
+              "HasSchedule": false,
+              "MRR__c": 0.0,
+              "SystemModstamp": "2026-01-16 18:00:23+00:00",
+              "Jira_Status__c": null,
+              "Umony_Archiving_Type__c": null,
+              "Archiving_User_Last_Name__c": null,
+              "ListPrice": 150.0,
+              "Umony_Do_Not_Record__c": null,
+              "HasRevenueSchedule": false,
+              "Technical_Implementation_Lead__c": null,
+              "LastViewedDate": "2026-01-21 10:02:07+00:00",
+              "Discount__c": 100.0,
+              "Id": "00kWe000005DPc1IAG",
+              "Create_JIRA__c": false,
+              "CanUseQuantitySchedule": false,
+              "User_Month__c": 0.0,
+              "Umony_Request_Type__c": "Provisioning",
+              "Turn_off_voicemail_list__c": null,
+              "Product_Code_copy__c": null,
+              "SortOrder": null,
+              "Umony_Authorized_User_Name__c": null,
+              "Weighted_ARR__c": 0.0,
+              "Federated_Overage_Waiver_Start_Date__c": null,
+              "ConnectionSentId": null,
+              "Product2Id": "01t5c00000DB8RjAAL"
+            },
+            {
+              "Product_Name_Extracted": "SMS Direct & Whatsapp Direct - Umony Number",
+              "Priority_Rating__c": null,
+              "Sponsored_Access_Network_Type__c": null,
+              "Umony_Other_Archiving_Platform__c": null,
+              "Opp_Record_Type__c": "0125c000000sDMm",
+              "Client_Engagement_Lead__c": null,
+              "Jira_Assignee_Email__c": null,
+              "Jira_Assignee__c": null,
+              "Archiving_User_First_Name__c": null,
+              "Onboarding_Duration__c": null,
+              "Deployment_Duration__c": 0.0,
+              "Deployment_Start_Date__c": null,
+              "Umony_Legal_Name__c": null,
+              "ARR__c": null,
+              "Onboarding_Comments__c": null,
+              "JIRA_Latest_Update__c": null,
+              "Onboarding_Lead__c": null,
+              "PricebookEntryId": "01uV40000038l1dIAA",
+              "X3_Fed_Overage_Price__c": null,
+              "X2_Fed_Overage__c": null,
+              "CS_Onboarding_Stage__c": null,
+              "UnitPrice": 240.0,
+              "Monthly_Update_Check__c": false,
+              "Umony_SMS_for_Aff_Marketing_Lead_Gen__c": null,
+              "LastModifiedById": "005o0000004EPuxAAG",
+              "Umony_Account_Number__c": null,
+              "Yearly__c": null,
+              "OpportunityId": "006We00000JecV3IAJ",
+              "Umony_Account_Pin__c": null,
+              "Turn_off_voicemail__c": null,
+              "Monthly__c": null,
+              "LastModifiedDate": "2026-01-16 18:00:23+00:00",
+              "Umony_Firm_Legal_Address__c": null,
+              "Overage_Price__c": null,
+              "Post_Sale_Status__c": "TAM WIP",
+              "Umony_Type_of_Legal_Firm__c": null,
+              "Umony_Voice_Route_URL__c": null,
+              "IsDeleted": false,
+              "Remove_Discount__c": false,
+              "Tier__c": 3.0,
+              "Umony_Firm_Phone_Number__c": null,
+              "Umony_Tax_number_ID_EIN__c": null,
+              "Quantity": 100.0,
+              "Parent_PS_JIRA_ticket__c": null,
+              "Amenity_Opp_Product_ID__c": null,
+              "Professional_Services_Time__c": 160.0,
+              "Product_Name__c": "SMS Direct & Whatsapp Direct - Umony Number",
+              "Umony_Phone_numbers_to_Port__c": null,
+              "Archiving_User_Email__c": null,
+              "Account_ID__c": "001We00000UrUEp",
+              "JIRA_ticket__c": null,
+              "Tech_Start_Date__c": null,
+              "Deliver_to_Umony__c": false,
+              "Onboarding_Stage_Completed_On__c": null,
+              "Umony_Network_telco_provider__c": null,
+              "Opportunity_Type__c": "New Client",
+              "Pass_Through_Fees_Federated__c": null,
+              "Overage_Comments__c": null,
+              "Federated_Overage_Limit__c": null,
+              "Opportunity_Hardware_Order_Type__c": null,
+              "Umony__c": null,
+              "Account_Name__c": "ABC Capital",
+              "ServiceDate": null,
+              "Umony_Archiving__c": null,
+              "HasQuantitySchedule": false,
+              "Customer_Environment__c": null,
+              "Federated_Products__c": null,
+              "Umony_Do_Not_Call__c": null,
+              "Discount": null,
+              "Umony_Order_Type__c": null,
+              "Opportunity_Product_ID__c": "00kWe000005DPc2",
+              "Price_PUPM__c": 0.0,
+              "ProductCode": null,
+              "Product_Campaign__c": "Federation",
+              "Override_ARR__c": false,
+              "Product_Family__c": "Messaging",
+              "Umony_Firm_Email_Address__c": null,
+              "Name": "ABC Capital - New Client - OCT25 - 100 users SMS Direct & Whatsapp Direct - Umony Number",
+              "Billing_Schedule__c": null,
+              "ConnectionReceivedId": null,
+              "CurrencyIsoCode": "USD",
+              "Federated_Overage_Model__c": null,
+              "LastReferencedDate": "2026-01-21 08:54:40+00:00",
+              "Status__c": "Active",
+              "TotalPrice": 24000.0,
+              "CreatedById": "005o0000004EPuxAAG",
+              "Promotional_Licenses__c": null,
+              "Federated_Overage_Waived_Until__c": null,
+              "CreatedDate": "2026-01-16 18:00:23+00:00",
+              "CanUseRevenueSchedule": false,
+              "Umony_Vertical_Type__c": "Financial Services",
+              "Description": null,
+              "HasSchedule": false,
+              "MRR__c": 2000.0,
+              "SystemModstamp": "2026-01-16 18:00:23+00:00",
+              "Jira_Status__c": null,
+              "Umony_Archiving_Type__c": null,
+              "Archiving_User_Last_Name__c": null,
+              "ListPrice": 240.0,
+              "Umony_Do_Not_Record__c": null,
+              "HasRevenueSchedule": false,
+              "Technical_Implementation_Lead__c": null,
+              "LastViewedDate": "2026-01-21 08:54:40+00:00",
+              "Discount__c": 0.0,
+              "Id": "00kWe000005DPc2IAG",
+              "Create_JIRA__c": false,
+              "CanUseQuantitySchedule": false,
+              "User_Month__c": 0.0,
+              "Umony_Request_Type__c": "Provisioning",
+              "Turn_off_voicemail_list__c": null,
+              "Product_Code_copy__c": null,
+              "SortOrder": null,
+              "Umony_Authorized_User_Name__c": null,
+              "Weighted_ARR__c": 19200.0,
+              "Federated_Overage_Waiver_Start_Date__c": null,
+              "ConnectionSentId": null,
+              "Product2Id": "01tV400000IpQAzIAN"
+            },
+            {
+              "Product_Name_Extracted": "WhatsApp Direct Lines - Umony Number",
+              "Priority_Rating__c": null,
+              "Sponsored_Access_Network_Type__c": null,
+              "Umony_Other_Archiving_Platform__c": null,
+              "Opp_Record_Type__c": "0125c000000sDMm",
+              "Client_Engagement_Lead__c": null,
+              "Jira_Assignee_Email__c": null,
+              "Jira_Assignee__c": null,
+              "Archiving_User_First_Name__c": null,
+              "Onboarding_Duration__c": null,
+              "Deployment_Duration__c": 0.0,
+              "Deployment_Start_Date__c": null,
+              "Umony_Legal_Name__c": null,
+              "ARR__c": null,
+              "Onboarding_Comments__c": null,
+              "JIRA_Latest_Update__c": null,
+              "Onboarding_Lead__c": null,
+              "PricebookEntryId": "01uV1000007iw97IAA",
+              "X3_Fed_Overage_Price__c": null,
+              "X2_Fed_Overage__c": null,
+              "CS_Onboarding_Stage__c": null,
+              "UnitPrice": 240.0,
+              "Monthly_Update_Check__c": false,
+              "Umony_SMS_for_Aff_Marketing_Lead_Gen__c": null,
+              "LastModifiedById": "005o0000004EPuxAAG",
+              "Umony_Account_Number__c": null,
+              "Yearly__c": null,
+              "OpportunityId": "006We00000JecV3IAJ",
+              "Umony_Account_Pin__c": null,
+              "Turn_off_voicemail__c": null,
+              "Monthly__c": null,
+              "LastModifiedDate": "2026-01-16 18:00:23+00:00",
+              "Umony_Firm_Legal_Address__c": null,
+              "Overage_Price__c": null,
+              "Post_Sale_Status__c": "TAM WIP",
+              "Umony_Type_of_Legal_Firm__c": null,
+              "Umony_Voice_Route_URL__c": null,
+              "IsDeleted": false,
+              "Remove_Discount__c": false,
+              "Tier__c": 3.0,
+              "Umony_Firm_Phone_Number__c": null,
+              "Umony_Tax_number_ID_EIN__c": null,
+              "Quantity": 50.0,
+              "Parent_PS_JIRA_ticket__c": null,
+              "Amenity_Opp_Product_ID__c": null,
+              "Professional_Services_Time__c": 80.0,
+              "Product_Name__c": "WhatsApp Direct Lines - Umony Number",
+              "Umony_Phone_numbers_to_Port__c": null,
+              "Archiving_User_Email__c": null,
+              "Account_ID__c": "001We00000UrUEp",
+              "JIRA_ticket__c": null,
+              "Tech_Start_Date__c": null,
+              "Deliver_to_Umony__c": false,
+              "Onboarding_Stage_Completed_On__c": null,
+              "Umony_Network_telco_provider__c": null,
+              "Opportunity_Type__c": "New Client",
+              "Pass_Through_Fees_Federated__c": null,
+              "Overage_Comments__c": null,
+              "Federated_Overage_Limit__c": null,
+              "Opportunity_Hardware_Order_Type__c": null,
+              "Umony__c": null,
+              "Account_Name__c": "ABC Capital",
+              "ServiceDate": null,
+              "Umony_Archiving__c": null,
+              "HasQuantitySchedule": false,
+              "Customer_Environment__c": null,
+              "Federated_Products__c": null,
+              "Umony_Do_Not_Call__c": null,
+              "Discount": null,
+              "Umony_Order_Type__c": null,
+              "Opportunity_Product_ID__c": "00kWe000005DPc3",
+              "Price_PUPM__c": 0.0,
+              "ProductCode": null,
+              "Product_Campaign__c": "Federation",
+              "Override_ARR__c": false,
+              "Product_Family__c": "Messaging",
+              "Umony_Firm_Email_Address__c": null,
+              "Name": "ABC Capital - New Client - OCT25 - 100 users WhatsApp Direct Lines - Umony Number",
+              "Billing_Schedule__c": null,
+              "ConnectionReceivedId": null,
+              "CurrencyIsoCode": "USD",
+              "Federated_Overage_Model__c": null,
+              "LastReferencedDate": "2026-01-21 09:35:13+00:00",
+              "Status__c": "Active",
+              "TotalPrice": 12000.0,
+              "CreatedById": "005o0000004EPuxAAG",
+              "Promotional_Licenses__c": null,
+              "Federated_Overage_Waived_Until__c": null,
+              "CreatedDate": "2026-01-16 18:00:23+00:00",
+              "CanUseRevenueSchedule": false,
+              "Umony_Vertical_Type__c": "Financial Services",
+              "Description": null,
+              "HasSchedule": false,
+              "MRR__c": 1000.0,
+              "SystemModstamp": "2026-01-16 18:00:23+00:00",
+              "Jira_Status__c": null,
+              "Umony_Archiving_Type__c": null,
+              "Archiving_User_Last_Name__c": null,
+              "ListPrice": 240.0,
+              "Umony_Do_Not_Record__c": null,
+              "HasRevenueSchedule": false,
+              "Technical_Implementation_Lead__c": null,
+              "LastViewedDate": "2026-01-21 09:35:13+00:00",
+              "Discount__c": 0.0,
+              "Id": "00kWe000005DPc3IAG",
+              "Create_JIRA__c": false,
+              "CanUseQuantitySchedule": false,
+              "User_Month__c": 0.0,
+              "Umony_Request_Type__c": "Provisioning",
+              "Turn_off_voicemail_list__c": null,
+              "Product_Code_copy__c": null,
+              "SortOrder": null,
+              "Umony_Authorized_User_Name__c": null,
+              "Weighted_ARR__c": 9600.0,
+              "Federated_Overage_Waiver_Start_Date__c": null,
+              "ConnectionSentId": null,
+              "Product2Id": "01tV400000IpUsvIAF"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,177 +1,256 @@
 """
-Phase 2: Smart Semantic Chunking
+Phase 2: Smart Semantic Chunking (Local PDF Parsing)
 
-Reads Document AI JSON from GCS (Phase 1 output), then:
-- Hierarchical context: chunks tagged with section (e.g. [Section: Page N] or inferred heading).
-  Section headers include numbered headings (e.g. 3.1, Table 21) so tables get proper context.
-- Table preservation: each table as one markdown chunk (no splitting); section header in same chunk.
-- Metadata: section_header and is_table for each chunk (for optional reranking).
+Uses pdfplumber to parse PDF locally (no Document AI needed).
+- Extracts tables as complete Markdown blocks (preserves structure)
+- Detects section headers for context
+- Creates semantic chunks with metadata
+
 Output: JSONL of chunks uploaded to gs://<bucket>/chunks/chunks.jsonl
 """
 import json
 import re
 import sys
+import os
 
+import pdfplumber
 import config
-from google.cloud import documentai_v1 as documentai
 from google.cloud import storage
 
 
-def get_text_from_anchor(doc, text_anchor):
-    """Extract text from document using layout text_anchor (start/end indices)."""
-    if not text_anchor or not text_anchor.text_segments:
+def extract_table_as_markdown(table):
+    """Convert pdfplumber table to Markdown format."""
+    if not table or not table.extract():
         return ""
-    full = doc.text or ""
-    parts = []
-    for seg in text_anchor.text_segments:
-        start = getattr(seg, "start_index", 0) or 0
-        end = getattr(seg, "end_index", 0) or 0
-        if end > start and start < len(full):
-            end = min(end, len(full))
-            parts.append(full[start:end])
-    return " ".join(parts).strip()
-
-
-def extract_table_markdown(doc, table, page_num):
-    """Extract table as a single markdown string (header + body rows)."""
-    rows_md = []
-    # Header rows
-    for row in getattr(table, "header_rows", []) or []:
-        cells = [get_text_from_anchor(doc, c.layout.text_anchor) for c in (getattr(row, "cells", []) or [])]
-        rows_md.append(" | ".join(cells))
-    # Body rows
-    for row in getattr(table, "body_rows", []) or []:
-        cells = [get_text_from_anchor(doc, c.layout.text_anchor) for c in (getattr(row, "cells", []) or [])]
-        rows_md.append(" | ".join(cells))
-    if not rows_md:
+    
+    rows = table.extract()
+    if not rows:
         return ""
-    # Markdown table: header separator
-    header = rows_md[0]
-    sep = " | ".join(["---"] * max(1, header.count("|") + 1))
-    return "\n".join([header, sep] + rows_md[1:])
+    
+    # Clean cells: replace None with empty string, strip whitespace
+    cleaned_rows = []
+    for row in rows:
+        cleaned_row = [str(cell).strip() if cell else "" for cell in row]
+        # Skip completely empty rows
+        if any(cleaned_row):
+            cleaned_rows.append(cleaned_row)
+    
+    if not cleaned_rows:
+        return ""
+    
+    # Build markdown table
+    md_lines = []
+    
+    # First row as header
+    header = cleaned_rows[0]
+    md_lines.append("| " + " | ".join(header) + " |")
+    md_lines.append("| " + " | ".join(["---"] * len(header)) + " |")
+    
+    # Remaining rows as body
+    for row in cleaned_rows[1:]:
+        # Pad row if needed
+        while len(row) < len(header):
+            row.append("")
+        md_lines.append("| " + " | ".join(row[:len(header)]) + " |")
+    
+    return "\n".join(md_lines)
 
 
-def _is_section_header(text):
-    """True if text looks like a section header (numbered or 'Table N')."""
-    t = (text or "").strip()
-    if not t:
+def is_section_header(text):
+    """Detect if text is a section header."""
+    if not text:
         return False
-    # e.g. "3.1 Detailed Technology Stack", "Table 21", "4.3 Performance Results"
-    if re.match(r"^(\d+\.\d+|\d+\.)\s", t) or re.match(r"^Table\s+\d+", t, re.I):
+    
+    text = text.strip()
+    
+    # Empty or too long
+    if not text or len(text) > 150:
+        return False
+    
+    # Numbered sections: "1.2 Title", "3.1.1 Subtitle"
+    if re.match(r"^\d+(\.\d+)*\.?\s+\w", text):
         return True
-    if len(t) < 80 and "." not in t:
+    
+    # "Table N:" or "Figure N:"
+    if re.match(r"^(Table|Figure|Chart|Appendix)\s+\d+", text, re.I):
         return True
+    
+    # All caps short text (likely a header)
+    if text.isupper() and len(text) < 80:
+        return True
+    
+    # Short text without period at end (likely a title)
+    if len(text) < 80 and not text.endswith('.') and not text.endswith(':'):
+        # Check if it has title-like capitalization
+        words = text.split()
+        if len(words) <= 10 and words[0][0].isupper():
+            return True
+    
     return False
 
 
-def chunk_document(doc, doc_label="doc0"):
+def extract_text_blocks(page, page_num):
+    """Extract text from a page, grouping into logical blocks."""
+    text = page.extract_text() or ""
+    if not text.strip():
+        return []
+    
+    # Split by double newlines (paragraph boundaries)
+    paragraphs = re.split(r'\n\s*\n', text)
+    
+    blocks = []
+    for para in paragraphs:
+        para = para.strip()
+        if para and len(para) > 10:  # Skip very short fragments
+            blocks.append(para)
+    
+    return blocks
+
+
+def chunk_pdf(pdf_path, doc_label="doc0"):
     """
-    Build chunks from a Document AI Document: paragraphs (with section context) and full tables.
-    Section headers (e.g. 3.1, Table 21) are detected so tables get the right section in the same chunk.
-    Returns list of {"id", "text", "metadata"} with section_header and is_table in metadata.
+    Parse PDF and create chunks with proper table handling and section context.
+    
+    Returns list of {"id", "text", "metadata"}
     """
     chunks = []
-    full_text = doc.text or ""
     current_section = "Document"
-
-    pages_list = getattr(doc, "pages", []) or []
-    for page_idx, page in enumerate(pages_list):
-        page_num = getattr(page, "page_number", None)
-        if page_num is None or page_num == 0:
-            page_num = page_idx + 1
-        section_context = f"Page {page_num}"
-
-        # Paragraphs (or blocks/lines): tag with section; detect section headers for hierarchy
-        paras = getattr(page, "paragraphs", []) or getattr(page, "blocks", []) or []
-        for i, para in enumerate(paras):
-            layout = getattr(para, "layout", None)
-            if not layout:
-                continue
-            text = get_text_from_anchor(doc, getattr(layout, "text_anchor", None))
-            if not text or not text.strip():
-                continue
-            if _is_section_header(text):
-                current_section = text.strip()
-                section_context = f"Page {page_num} > {current_section}"
-            chunk_id = f"{doc_label}_p{page_num}_para{i}"
-            chunks.append({
-                "id": chunk_id,
-                "text": f"[Section: {section_context}]\n{text}",
-                "metadata": {
-                    "type": "text",
-                    "page": page_num,
-                    "section_context": section_context,
-                    "section_header": section_context,
-                    "is_table": False,
-                },
-            })
-
-        # Tables: one chunk per table (full markdown); section header in same chunk
-        for i, table in enumerate(getattr(page, "tables", []) or []):
-            table_md = extract_table_markdown(doc, table, page_num)
-            if not table_md.strip():
-                continue
-            chunk_id = f"{doc_label}_p{page_num}_tbl{i}"
-            chunks.append({
-                "id": chunk_id,
-                "text": f"[Section: {section_context}]\n\n{table_md}",
-                "metadata": {
-                    "type": "table",
-                    "page": page_num,
-                    "section_context": section_context,
-                    "section_header": section_context,
-                    "is_table": True,
-                },
-            })
-
+    
+    print(f"   Opening PDF: {pdf_path}")
+    
+    with pdfplumber.open(pdf_path) as pdf:
+        total_pages = len(pdf.pages)
+        print(f"   Total pages: {total_pages}")
+        
+        for page_num, page in enumerate(pdf.pages, start=1):
+            if page_num % 10 == 0:
+                print(f"   Processing page {page_num}/{total_pages}...")
+            
+            # Extract tables first (so we can exclude table regions from text)
+            tables = page.find_tables()
+            table_bboxes = [t.bbox for t in tables] if tables else []
+            
+            # Extract and chunk tables
+            for tbl_idx, table in enumerate(tables):
+                table_md = extract_table_as_markdown(table)
+                if table_md and len(table_md) > 20:
+                    chunk_id = f"{doc_label}_p{page_num}_tbl{tbl_idx}"
+                    
+                    # Try to get table title from text just above table
+                    table_context = current_section
+                    
+                    chunks.append({
+                        "id": chunk_id,
+                        "text": f"[Page {page_num} | Section: {table_context}]\n\n{table_md}",
+                        "metadata": {
+                            "type": "table",
+                            "page": page_num,
+                            "section_header": table_context,
+                            "is_table": True,
+                        },
+                    })
+            
+            # Extract text blocks (excluding table regions would require more complex logic)
+            text_blocks = extract_text_blocks(page, page_num)
+            
+            for blk_idx, block in enumerate(text_blocks):
+                # Update section header if this looks like one
+                if is_section_header(block):
+                    current_section = block[:100]  # Limit length
+                
+                chunk_id = f"{doc_label}_p{page_num}_blk{blk_idx}"
+                
+                # Create chunk with context
+                chunk_text = f"[Page {page_num} | Section: {current_section}]\n\n{block}"
+                
+                chunks.append({
+                    "id": chunk_id,
+                    "text": chunk_text,
+                    "metadata": {
+                        "type": "text",
+                        "page": page_num,
+                        "section_header": current_section,
+                        "is_table": False,
+                    },
+                })
+    
     return chunks
 
 
-def list_docai_json_blobs(storage_client, bucket_name, prefix):
-    """List .json blobs under GCS prefix (Document AI output)."""
-    blobs = list(storage_client.list_blobs(bucket_name, prefix=prefix))
-    return [b for b in blobs if b.name.endswith(".json")]
+def merge_small_chunks(chunks, min_chars=200):
+    """Merge very small consecutive chunks from the same page."""
+    if not chunks:
+        return chunks
+    
+    merged = []
+    buffer = None
+    
+    for chunk in chunks:
+        if buffer is None:
+            buffer = chunk
+            continue
+        
+        # If current buffer is too small and same page, merge
+        if (len(buffer["text"]) < min_chars and 
+            buffer["metadata"]["page"] == chunk["metadata"]["page"] and
+            not buffer["metadata"]["is_table"] and 
+            not chunk["metadata"]["is_table"]):
+            # Merge texts
+            buffer["text"] = buffer["text"] + "\n\n" + chunk["text"].split("]", 1)[-1].strip()
+            buffer["id"] = buffer["id"]  # Keep first ID
+        else:
+            merged.append(buffer)
+            buffer = chunk
+    
+    if buffer:
+        merged.append(buffer)
+    
+    return merged
 
 
 def main():
     print("\n" + "=" * 60)
-    print("  PHASE 2: Smart Chunking (Document AI → chunks)")
+    print("  PHASE 2: Smart Chunking (Local PDF → chunks)")
     print("=" * 60)
-
-    bucket = config.GCS_BUCKET_NAME
-    docai_prefix = config.GCS_OUTPUT_PREFIX
-    chunks_prefix = config.CHUNK_OUTPUT_PREFIX
-
-    storage_client = storage.Client(project=config.PROJECT_ID)
-
-    print("\n[Step 1] Listing Document AI JSON files in GCS...")
-    blobs = list_docai_json_blobs(storage_client, bucket, docai_prefix)
-    if not blobs:
-        print(f"   No JSON files under gs://{bucket}/{docai_prefix}/. Run Phase 1 first.")
+    print(f"\n  Project: {config.PROJECT_ID}")
+    print(f"  Bucket:  {config.GCS_BUCKET_NAME}")
+    
+    # Check for local PDF
+    pdf_path = config.LOCAL_PDF_PATH
+    if not os.path.isfile(pdf_path):
+        print(f"\n   ERROR: PDF not found at {pdf_path}")
+        print("   Run Phase 1 first or place PDF at LOCAL_PDF_PATH.")
         sys.exit(1)
-    print(f"   Found {len(blobs)} JSON file(s).")
-
-    print("\n[Step 2] Parsing and chunking...")
-    all_chunks = []
-    for idx, blob in enumerate(blobs):
-        data = blob.download_as_bytes()
-        try:
-            doc = documentai.Document.from_json(data, ignore_unknown_fields=True)
-        except Exception as e:
-            print(f"   Skip {blob.name}: {e}")
-            continue
-        label = f"doc{idx}"
-        chunks = chunk_document(doc, doc_label=label)
-        all_chunks.extend(chunks)
-        print(f"   {blob.name}: {len(chunks)} chunks")
-
-    if not all_chunks:
-        print("   No chunks produced.")
+    
+    print(f"\n[Step 1] Parsing local PDF with pdfplumber...")
+    print(f"   PDF: {os.path.abspath(pdf_path)}")
+    print(f"   Size: {os.path.getsize(pdf_path) / (1024*1024):.2f} MB")
+    
+    chunks = chunk_pdf(pdf_path, doc_label="doc0")
+    print(f"   Raw chunks extracted: {len(chunks)}")
+    
+    print("\n[Step 2] Merging small chunks...")
+    chunks = merge_small_chunks(chunks, min_chars=150)
+    print(f"   After merging: {len(chunks)} chunks")
+    
+    # Stats
+    table_chunks = sum(1 for c in chunks if c["metadata"]["is_table"])
+    text_chunks = len(chunks) - table_chunks
+    total_chars = sum(len(c["text"]) for c in chunks)
+    print(f"   Table chunks: {table_chunks}")
+    print(f"   Text chunks: {text_chunks}")
+    print(f"   Total characters: {total_chars:,}")
+    
+    if not chunks:
+        print("   ERROR: No chunks produced.")
         sys.exit(1)
-    print(f"   Total chunks: {len(all_chunks)}")
-
+    
     print("\n[Step 3] Uploading chunks to GCS...")
-    chunks_jsonl = "\n".join(json.dumps(c) for c in all_chunks)
+    storage_client = storage.Client(project=config.PROJECT_ID)
+    bucket = config.GCS_BUCKET_NAME
+    chunks_prefix = config.CHUNK_OUTPUT_PREFIX
+    
+    chunks_jsonl = "\n".join(json.dumps(c) for c in chunks)
     blob_name = f"{chunks_prefix}/chunks.jsonl"
     bucket_obj = storage_client.bucket(bucket)
     out_blob = bucket_obj.blob(blob_name)
@@ -181,9 +260,15 @@ def main():
     )
     uri = f"gs://{bucket}/{blob_name}"
     print(f"   Uploaded: {uri}")
-
+    
+    # Show sample chunks
+    print("\n[Sample chunks]")
+    for i, chunk in enumerate(chunks[:3]):
+        preview = chunk["text"][:200].replace("\n", " ")
+        print(f"   {i+1}. [{chunk['metadata']['type']}] {preview}...")
+    
     print("\n" + "=" * 60)
-    print("  Phase 2 complete. Chunks ready for Phase 3 (embedding + index).")
+    print("  Phase 2 complete! Chunks ready for Phase 3 (embedding + index).")
     print("=" * 60 + "\n")
 
 

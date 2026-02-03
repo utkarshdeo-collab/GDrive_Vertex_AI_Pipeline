@@ -5,9 +5,9 @@ Aligns with: Ingestion → Processing → Indexing → Interface (ADK).
 import os
 
 # ================= PROJECT =================
-# Your Vertex AI project (MCP-Project-Alpha). Override with GCP_PROJECT_ID env if needed.
-PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "mcp-project-alpha")
-LOCATION = os.environ.get("GCP_LOCATION", "us-central1")
+# Your Vertex AI project. Override with GCP_PROJECT_ID env if needed.
+PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "sym-dev-mr-agents-01")
+LOCATION = os.environ.get("GCP_LOCATION", "us-east4")  # Northern Virginia (allowed by org policy)
 
 # Document AI uses regional endpoints: "us" or "eu" (not us-central1).
 # Map Vertex region to Document AI region.
@@ -27,12 +27,14 @@ GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", f"{PROJECT_ID}-docai-staging
 GCS_INPUT_PREFIX = "input"
 GCS_OUTPUT_PREFIX = "document-ai-output"
 
-# Document AI processor ID (your "test" Document OCR processor, region us).
-DOCAI_PROCESSOR_ID = os.environ.get("DOCAI_PROCESSOR_ID", "711e5322a9d89b88")
+# Document AI processor ID (your Document OCR processor, region us).
+# Leave empty to skip Document AI processing in Phase 1.
+DOCAI_PROCESSOR_ID = os.environ.get("DOCAI_PROCESSOR_ID", "")
 
 # Google Drive: folder ID (list PDFs and use first) or file ID (single PDF).
-DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID", "")  # leave empty when using file ID
-DRIVE_FILE_ID = os.environ.get("DRIVE_FILE_ID", "1RaWmZPygasvTlQ0Otg4g5YZF1FZYZ8GB")  # PDF from Drive URL
+# Leave both empty to use local file (LOCAL_PDF_PATH)
+DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID", "")
+DRIVE_FILE_ID = os.environ.get("DRIVE_FILE_ID", "")  # Empty = use local file
 
 # Local path where PDF is downloaded (or used if not from Drive).
 LOCAL_PDF_PATH = os.environ.get("LOCAL_PDF_PATH", "input.pdf")
@@ -46,15 +48,22 @@ EMBEDDING_MODEL = "text-embedding-004"
 EMBEDDINGS_GCS_PREFIX = "embeddings"
 
 # ================= PHASE 4: DEPLOY & ADK =================
-# Vector Search index (from Phase 3 output).
-VECTOR_INDEX_ID = os.environ.get("VECTOR_INDEX_ID", "17005046835183616")
+# Vector Search index (from Phase 3 output). Update after running Phase 3.
+VECTOR_INDEX_ID = os.environ.get("VECTOR_INDEX_ID", "4165552578387509248")
 INDEX_ENDPOINT_DISPLAY_NAME = os.environ.get("INDEX_ENDPOINT_DISPLAY_NAME", "doc-pipeline-endpoint")
-DEPLOYED_INDEX_ID = os.environ.get("DEPLOYED_INDEX_ID", "doc_pipeline_deployed_1770029483421")
+DEPLOYED_INDEX_ID = os.environ.get("DEPLOYED_INDEX_ID", "doc_pipeline_deployed")
 # Endpoint resource (for query script). Use full name or leave empty to lookup by display name.
 INDEX_ENDPOINT_RESOURCE_NAME = os.environ.get(
     "INDEX_ENDPOINT_RESOURCE_NAME",
-    "projects/970885760464/locations/us-central1/indexEndpoints/6571185063914897408",
+    "projects/913936335566/locations/us-east4/indexEndpoints/5152614952967602176",
 )
 # Gemini model for answering from retrieved chunks.
 # Run check_gemini_models.py to see available models in your project.
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-001")
+
+# ================= PRICING (public list prices, for cost display in orchestrator) =================
+# Override with env if needed. See cloud.google.com/vertex-ai/pricing and cloud.google.com/bigquery/pricing.
+GEMINI_INPUT_PER_1M_TOKENS = float(os.environ.get("GEMINI_INPUT_PER_1M_TOKENS", "0.075"))   # Gemini 2.0 Flash input $/1M tokens
+GEMINI_OUTPUT_PER_1M_TOKENS = float(os.environ.get("GEMINI_OUTPUT_PER_1M_TOKENS", "0.30"))  # Gemini 2.0 Flash output $/1M tokens
+EMBEDDING_PER_1K_CHARS = float(os.environ.get("EMBEDDING_PER_1K_CHARS", "0.000025"))        # text-embedding-004 $/1K characters
+BIGQUERY_PER_TB = float(os.environ.get("BIGQUERY_PER_TB", "5.0"))                           # BigQuery on-demand $/TB processed

@@ -13,3 +13,17 @@ google-adk>=1.5.0
 # Optional: local-only Phase 1 fallback (phase1_local_ingest.py)
 # PyMuPDF>=1.23.0
 # pdfplumber>=0.10.0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
