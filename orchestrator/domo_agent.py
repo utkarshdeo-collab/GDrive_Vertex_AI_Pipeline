@@ -1,8 +1,8 @@
 """
-Salesforce sub-agent: self-contained BigQuery agent using nexus_data schema.
-Schema path: orchestrator/nexus_schema.json (next to this file).
+Domo sub-agent: self-contained BigQuery agent using domo_test_dataset schema.
+Schema path: orchestrator/domo_schema.json (next to this file).
 Uses root config.py for project, location, and model.
-Exports create_salesforce_agent(credentials) for the orchestrator.
+Exports create_domo_agent(credentials) for the orchestrator.
 Uses a custom execute_sql tool that records BigQuery bytes for cost display.
 """
 import json
@@ -21,18 +21,18 @@ from google.adk.models import Gemini
 from google.adk.tools.function_tool import FunctionTool
 
 # Schema lives next to this module in orchestrator/
-SCHEMA_FILE = Path(__file__).resolve().parent / "nexus_schema.json"
+SCHEMA_FILE = Path(__file__).resolve().parent / "domo_schema.json"
 
 # Max rows to return (match typical ADK default)
 _MAX_QUERY_ROWS = 1000
 
-# Credentials for BigQuery (set by create_salesforce_agent so tool uses same creds as orchestrator)
+# Credentials for BigQuery (set by create_domo_agent so tool uses same creds as orchestrator)
 _bq_credentials = None
 
 
 def execute_sql(project_id: str, query: str) -> dict:
     """Run a read-only BigQuery SQL query. Records bytes processed for cost display.
-    Use fully qualified names: `project_id.nexus_data.TABLE_NAME`.
+    Use fully qualified names: `project_id.domo_test_dataset.TABLE_NAME`.
     """
     from .usage_collector import record_bigquery
     import google.auth
@@ -48,7 +48,7 @@ def execute_sql(project_id: str, query: str) -> dict:
         creds = _bq_credentials
         if creds is None:
             creds, _ = google.auth.default()
-        # Do not set location so BigQuery uses dataset location (nexus_data may be in US multi-region)
+        # Do not set location so BigQuery uses dataset location (domo_test_dataset may be in US multi-region)
         client = bigquery.Client(project=project_id, credentials=creds)
         # Dry run to enforce SELECT-only
         dry_run_job = client.query(
@@ -87,15 +87,15 @@ def execute_sql(project_id: str, query: str) -> dict:
 
 
 def get_schema_context(path: Path = None) -> str:
-    """Load nexus_data schema from JSON for the agent instruction (full schema for SQL)."""
+    """Load domo_test_dataset schema from JSON for the agent instruction (full schema for SQL)."""
     path = path or SCHEMA_FILE
     if not path.exists():
-        return "Note: nexus_schema.json not found. Use standard Salesforce naming conventions."
+        return "Note: domo_schema.json not found. Use standard Domo naming conventions."
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         tables = data.get("datasets", [{}])[0].get("tables", [])
-        lines = ["# DATABASE SCHEMA (nexus_data)"]
+        lines = ["# DATABASE SCHEMA (domo_test_dataset)"]
         for t in tables:
             lines.append(f"## Table: {t['table_id']}")
             for c in t.get("schema", []):
@@ -105,9 +105,9 @@ def get_schema_context(path: Path = None) -> str:
         return f"Schema load error: {e}"
 
 
-def create_salesforce_agent(credentials):
+def create_domo_agent(credentials):
     """
-    Create the Salesforce/BigQuery sub-agent.
+    Create the Domo/BigQuery sub-agent.
     credentials: from google.auth.default(); passed to execute_sql so BigQuery uses same creds.
     """
     global _bq_credentials
@@ -119,43 +119,14 @@ def create_salesforce_agent(credentials):
         vertexai=True,
     )
     schema_context = get_schema_context()
-    instruction = f"""You answer questions about Salesforce data stored in BigQuery.
+    instruction = f"""You answer questions about Domo data stored in BigQuery.
 {schema_context}
-
-GENERAL RULES:
-- Use the execute_sql tool to run READ-ONLY SQL (SELECT only).
-- Always use fully qualified table names: `{config.PROJECT_ID}.nexus_data.TABLE_NAME`.
-- Never run INSERT, UPDATE, DELETE, or DDL statements.
-
-INTENT: ACCOUNT vs SNAPSHOT
-- **Single-account intent**: User asks about one specific account by name (e.g. "status of ABC Capital", "commercial data for Antino Bank1", "tell me about Antino Bank"). → Query that account only and return one commercial line.
-- **Snapshot intent**: User asks for a snapshot, all accounts, overview, or commercial summary of everyone (e.g. "give me the snapshot", "commercial snapshot", "all accounts", "account overview", "show me commercial info for all accounts"). → Query ALL accounts from both tables and return one commercial line per account.
-
-COMMERCIAL LINE FORMAT (use for both single-account and snapshot):
-  Commercial: $<Total_ARR> ARR | Renewal: <Renewal_Date> | Owner: <Account_Owner>
-  - Use numeric ARR, renewal date (or "N/A" if null), and owner name.
-
-SINGLE-ACCOUNT (status / one account by name):
-- Tables: `sf_account_info` and `dummy_account_info` (both have Customer_Name, Total_ARR, Renewal_Date, Account_Owner). Try the table that likely has the account; if not found, try the other.
-- Query example:
-  SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner
-  FROM `{config.PROJECT_ID}.nexus_data.sf_account_info`
-  WHERE Customer_Name = '<ACCOUNT_NAME>';
-  (or same FROM dummy_account_info)
-- Reply with ONE line in the commercial format above. If not found in either table, say: "No account record was found for <ACCOUNT_NAME> in sf_account_info or dummy_account_info."
-
-SNAPSHOT (all accounts):
-- Get commercial data for EVERY account from BOTH tables. Run two queries (no WHERE on Customer_Name):
-  1) SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner FROM `{config.PROJECT_ID}.nexus_data.sf_account_info`;
-  2) SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner FROM `{config.PROJECT_ID}.nexus_data.dummy_account_info`;
-- For the answer: list each account on its own line. Each line must show the account name and then the commercial line, e.g.:
-  **<Customer_Name>**: Commercial: $<Total_ARR> ARR | Renewal: <Renewal_Date> | Owner: <Account_Owner>
-- Order: list sf_account_info results first, then dummy_account_info results (or combine and sort by name if you prefer). Do not add extra commentary unless the user asks.
-"""
+Use the execute_sql tool to query data. Always use fully qualified names: `{config.PROJECT_ID}.domo_test_dataset.TABLE_NAME`.
+Return clear summaries and numbers. Do not run write/delete statements."""
 
     return LlmAgent(
         model=model,
-        name="salesforce_agent",
+        name="domo_agent",
         instruction=instruction,
         tools=[FunctionTool(execute_sql)],
     )

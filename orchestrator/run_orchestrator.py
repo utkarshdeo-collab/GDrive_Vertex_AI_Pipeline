@@ -1,7 +1,7 @@
 """
-Orchestrator: Master agent with two sub-agents (PDF + Salesforce).
-Uses one Gemini model. Routes to pdf_agent or salesforce_agent using a routing-focused data dictionary.
-Combined questions (PDF + Salesforce in one) are answered with: ask separately.
+Orchestrator: Master agent with three sub-agents (PDF + Salesforce + Domo).
+Uses one Gemini model. Routes to pdf_agent, salesforce_agent, or domo_agent using a routing-focused data dictionary.
+Combined questions (PDF + Salesforce + Domo in one) are answered with: ask separately.
 """
 import asyncio
 import json
@@ -28,12 +28,14 @@ from google.genai import types
 
 from orchestrator.pdf_agent import create_pdf_agent
 from orchestrator.salesforce_agent import create_salesforce_agent
+from orchestrator.domo_agent import create_domo_agent
 from orchestrator.usage_collector import clear as usage_clear
 from orchestrator.usage_collector import get_and_clear as usage_get_and_clear
 from orchestrator.usage_collector import record_gemini as usage_record_gemini
 
-# Schema for routing summary only (nexus_schema.json in orchestrator folder)
-SCHEMA_FILE = Path(__file__).resolve().parent / "nexus_schema.json"
+# Schema files for routing summary (nexus_schema.json and domo_schema.json in orchestrator folder)
+SALESFORCE_SCHEMA_FILE = Path(__file__).resolve().parent / "nexus_schema.json"
+DOMO_SCHEMA_FILE = Path(__file__).resolve().parent / "domo_schema.json"
 
 
 def _print_cost_breakdown(tasks: list) -> None:
@@ -46,7 +48,7 @@ def _print_cost_breakdown(tasks: list) -> None:
         kind = t.get("kind")
         label = t.get("label", "")
         # Fix mis-attribution: first Gemini event is always the orchestrator (routing), but ADK may set author to a sub-agent.
-        if i == 0 and kind == "gemini" and label in ("salesforce_agent", "pdf_agent"):
+        if i == 0 and kind == "gemini" and label in ("salesforce_agent", "pdf_agent", "domo_agent"):
             label = "orchestrator"
         if kind == "gemini":
             pin = t.get("prompt_token_count", 0) or 0
@@ -72,13 +74,22 @@ def _print_cost_breakdown(tasks: list) -> None:
     print(f"  {'Total':36} : {'':28} → ${total_cost:.6f}\n")
 
 
-# Keywords that indicate the question is about Salesforce/BigQuery (not the PDF)
+# Keywords that indicate the question is about Salesforce/BigQuery (not the PDF or Domo)
 _SALESFORCE_KEYWORDS = (
     "arr", "pipeline", "opportunity", "opportunities", "customer", "customers",
-    "account", "accounts", "salesforce", "bigquery", "nexus_data",
+    "account", "accounts", "salesforce", "nexus_data",
     "total_arr", "customer_name", "contract", "renewal", "license", "licenses",
     "stage", "closed won", "close date", "owner", "contracted", "antino bank",
-    "abc capital", "sf_account", "sf_opportunity", "execute_sql", "query data",
+    "abc capital", "sf_account", "sf_opportunity",
+    "snapshot", "all accounts", "commercial snapshot", "account overview",
+)
+
+# Keywords that indicate the question is about Domo/BigQuery (not the PDF or Salesforce).
+# Include user/person-style questions (first_name, last_name, company in domo_export).
+_DOMO_KEYWORDS = (
+    "domo", "domo_test_dataset", "domo data", "domo dataset",
+    "first name", "last name", "user with", "company of the user", "person named",
+    "first_name", "last_name",
 )
 
 # Keywords that indicate the question is about the UPLOADED DOCUMENT/PDF only
@@ -97,9 +108,15 @@ def _is_likely_salesforce_question(text: str) -> bool:
 
 
 def _is_likely_document_question(text: str) -> bool:
-    """True if the question is clearly about the uploaded document/PDF (not Salesforce)."""
+    """True if the question is clearly about the uploaded document/PDF (not Salesforce or Domo)."""
     lower = text.lower().strip()
     return any(kw in lower for kw in _DOCUMENT_KEYWORDS)
+
+
+def _is_likely_domo_question(text: str) -> bool:
+    """True if the question clearly asks about Domo/BigQuery data (not the PDF or Salesforce)."""
+    lower = text.lower().strip()
+    return any(kw in lower for kw in _DOMO_KEYWORDS)
 
 
 def _maybe_add_routing_hint(user_message: str) -> str:
@@ -108,6 +125,12 @@ def _maybe_add_routing_hint(user_message: str) -> str:
         return (
             "[ROUTING: This question is about Salesforce/BigQuery data (e.g. ARR, customers, opportunities). "
             "You MUST delegate to salesforce_agent only.]\n\n"
+            + user_message
+        )
+    if _is_likely_domo_question(user_message):
+        return (
+            "[ROUTING: This question is about Domo/BigQuery data (domo_test_dataset). "
+            "You MUST delegate to domo_agent only.]\n\n"
             + user_message
         )
     if _is_likely_document_question(user_message):
@@ -119,32 +142,57 @@ def _maybe_add_routing_hint(user_message: str) -> str:
     return user_message
 
 
-def get_routing_data_dictionary(path: Path) -> str:
-    """Build a short routing-focused summary from nexus_schema.json for the master agent.
-    Dataset + table names + key columns per table so the master can recognize Salesforce/BigQuery questions."""
-    if not path.exists():
-        return "Salesforce data is in BigQuery dataset nexus_data (schema file not found)."
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        tables = data.get("datasets", [{}])[0].get("tables", [])
-        lines = [
-            "# Salesforce / BigQuery data (nexus_data) — use this to decide if the user is asking about Salesforce/BigQuery.",
-            "If the question mentions any of these topics or columns, route to salesforce_agent:",
-            "",
-        ]
-        for t in tables:
-            cols = [c["column_name"] for c in t.get("schema", [])]
-            # Keep first 15 columns for routing; that's enough for ARR, customer, opportunity, etc.
-            key_cols = cols[:15] if len(cols) > 15 else cols
-            lines.append(f"- {t['table_id']}: {', '.join(key_cols)}")
-        return "\n".join(lines)
-    except Exception as e:
-        return f"Salesforce data: BigQuery dataset nexus_data (routing summary error: {e})"
+def get_routing_data_dictionary(salesforce_path: Path, domo_path: Path) -> str:
+    """Build a short routing-focused summary from schema files for the master agent.
+    Dataset + table names + key columns per table so the master can recognize Salesforce/BigQuery and Domo questions."""
+    lines = []
+    
+    # Salesforce schema
+    if salesforce_path.exists():
+        try:
+            with open(salesforce_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            tables = data.get("datasets", [{}])[0].get("tables", [])
+            lines.append("# Salesforce / BigQuery data (nexus_data) — use this to decide if the user is asking about Salesforce/BigQuery.")
+            lines.append("If the question mentions any of these topics or columns, route to salesforce_agent:")
+            lines.append("")
+            for t in tables:
+                cols = [c["column_name"] for c in t.get("schema", [])]
+                # Keep first 15 columns for routing; that's enough for ARR, customer, opportunity, etc.
+                key_cols = cols[:15] if len(cols) > 15 else cols
+                lines.append(f"- {t['table_id']}: {', '.join(key_cols)}")
+        except Exception as e:
+            lines.append(f"Salesforce data: BigQuery dataset nexus_data (routing summary error: {e})")
+    else:
+        lines.append("Salesforce data is in BigQuery dataset nexus_data (schema file not found).")
+    
+    lines.append("")
+    lines.append("")
+    
+    # Domo schema
+    if domo_path.exists():
+        try:
+            with open(domo_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            tables = data.get("datasets", [{}])[0].get("tables", [])
+            lines.append("# Domo / BigQuery data (domo_test_dataset) — use this to decide if the user is asking about Domo/BigQuery.")
+            lines.append("If the question mentions any of these topics or columns, route to domo_agent:")
+            lines.append("")
+            for t in tables:
+                cols = [c["column_name"] for c in t.get("schema", [])]
+                # Keep first 15 columns for routing
+                key_cols = cols[:15] if len(cols) > 15 else cols
+                lines.append(f"- {t['table_id']}: {', '.join(key_cols)}")
+        except Exception as e:
+            lines.append(f"Domo data: BigQuery dataset domo_test_dataset (routing summary error: {e})")
+    else:
+        lines.append("Domo data is in BigQuery dataset domo_test_dataset (schema file not found).")
+    
+    return "\n".join(lines)
 
 
 def build_agents(credentials, routing_data_dict: str):
-    """Build PDF agent, Salesforce agent, and master orchestrator from sub-agent modules."""
+    """Build PDF agent, Salesforce agent, Domo agent, and master orchestrator from sub-agent modules."""
     model = Gemini(
         model_name=config.GEMINI_MODEL,
         project=config.PROJECT_ID,
@@ -155,6 +203,7 @@ def build_agents(credentials, routing_data_dict: str):
     # Sub-agents from self-contained modules
     pdf_agent = create_pdf_agent()
     salesforce_agent = create_salesforce_agent(credentials)
+    domo_agent = create_domo_agent(credentials)
 
     # Master agent: route using data dictionary; no combined questions
     master_instruction = f"""You are the master assistant. Route each user question to exactly ONE specialist.
@@ -162,19 +211,21 @@ def build_agents(credentials, routing_data_dict: str):
 {routing_data_dict}
 
 ROUTING RULES:
-- If the user message starts with "[ROUTING: ... salesforce_agent only.]": you MUST delegate to salesforce_agent (do not use pdf_agent).
-- If the user message starts with "[ROUTING: ... pdf_agent only.]": you MUST delegate to pdf_agent (do not use salesforce_agent).
+- If the user message starts with "[ROUTING: ... salesforce_agent only.]": you MUST delegate to salesforce_agent (do not use pdf_agent or domo_agent).
+- If the user message starts with "[ROUTING: ... domo_agent only.]": you MUST delegate to domo_agent (do not use pdf_agent or salesforce_agent).
+- If the user message starts with "[ROUTING: ... pdf_agent only.]": you MUST delegate to pdf_agent (do not use salesforce_agent or domo_agent).
 - If the question is about the UPLOADED DOCUMENT or PDF (reports, case studies, implementation cost, change management, budget, lessons learned, post-implementation, executive summary, tables in the document): delegate to pdf_agent.
-- If the question is about SALESFORCE or BIGQUERY data (ARR, pipeline, opportunities, customers, licenses, Total_ARR, Customer_Name, Opportunity_Name, Stage, CloseDate, or any tables/columns above): delegate to salesforce_agent.
-- If the question clearly needs BOTH document content AND Salesforce/BigQuery data in one question: do NOT call both. Reply with exactly: "Please ask about the document or about Salesforce data separately."
+- If the question is about SALESFORCE or BIGQUERY data (ARR, pipeline, opportunities, customers, licenses, Total_ARR, Customer_Name, Opportunity_Name, Stage, CloseDate, nexus_data, or any Salesforce tables/columns above): delegate to salesforce_agent.
+- If the question is about DOMO or BIGQUERY data (domo_test_dataset, or any Domo tables/columns above): delegate to domo_agent.
+- If the question clearly needs MULTIPLE data sources (document + Salesforce + Domo) in one question: do NOT call multiple agents. Reply with exactly: "Please ask about the document, Salesforce data, or Domo data separately."
 
-Always delegate to exactly one sub-agent (pdf_agent or salesforce_agent). After you get the answer, present it clearly to the user. Do not mention "Salesforce data" when the user asked about the document."""
+Always delegate to exactly one sub-agent (pdf_agent, salesforce_agent, or domo_agent). After you get the answer, present it clearly to the user. Do not mention "Salesforce data" when the user asked about the document or Domo."""
 
     master_agent = LlmAgent(
         model=model,
         name="orchestrator",
         instruction=master_instruction,
-        sub_agents=[pdf_agent, salesforce_agent],
+        sub_agents=[pdf_agent, salesforce_agent, domo_agent],
     )
 
     return master_agent
@@ -182,7 +233,7 @@ Always delegate to exactly one sub-agent (pdf_agent or salesforce_agent). After 
 
 async def main():
     print("\n" + "=" * 60)
-    print("  ORCHESTRATOR — PDF + Salesforce (Master + 2 Sub-Agents)")
+    print("  ORCHESTRATOR — PDF + Salesforce + Domo (Master + 3 Sub-Agents)")
     print("=" * 60)
     print(f"  Project: {config.PROJECT_ID}")
     print(f"  Region:  {config.LOCATION}")
@@ -207,7 +258,7 @@ async def main():
         print(f"  Authentication failed: {e}")
         sys.exit(1)
 
-    routing_data_dict = get_routing_data_dictionary(SCHEMA_FILE)
+    routing_data_dict = get_routing_data_dictionary(SALESFORCE_SCHEMA_FILE, DOMO_SCHEMA_FILE)
     root_agent = build_agents(credentials, routing_data_dict)
 
     app = App(name="orchestrator_app", root_agent=root_agent)
@@ -223,7 +274,7 @@ async def main():
         user_id="user",
     )
 
-    print("\n  Ready. Ask about documents (PDF) or Salesforce/BigQuery data.")
+    print("\n  Ready. Ask about documents (PDF), Salesforce/BigQuery data, or Domo/BigQuery data.")
     print("  Type 'exit' to quit.\n")
 
     while True:
