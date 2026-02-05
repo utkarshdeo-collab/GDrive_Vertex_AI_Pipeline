@@ -121,14 +121,21 @@ def main():
     print("\n" + "=" * 60)
     print("  PHASE 3: Indexing (Embeddings → Vector Search)")
     print("=" * 60)
+    print("\n  Chunks → embeddings (text-embedding-004) → GCS → Vector Search index (async).")
+    print("  For ~1.7k chunks expect ~10–15 min for embedding; index build is async (30+ min).")
+    print("=" * 60)
 
-    bucket = config.GCS_BUCKET_NAME
     chunks_prefix = config.CHUNK_OUTPUT_PREFIX
     embeddings_prefix = getattr(config, "EMBEDDINGS_GCS_PREFIX", "embeddings")
-    chunks_path = f"{chunks_prefix}/chunks.jsonl"
 
     storage_client = storage.Client(project=config.PROJECT_ID)
 
+    # Use same bucket as Phase 2 chunks (CHUNKS_BUCKET = pdf-input bucket by default)
+    bucket = getattr(config, "CHUNKS_BUCKET", config.GCS_PDF_INPUT_BUCKET)
+    chunks_path = f"{chunks_prefix}/chunks.jsonl"
+
+    print(f"\n  Chunks: gs://{bucket}/{chunks_path}")
+    print(f"  Embeddings output: gs://{bucket}/{embeddings_prefix}/")
     print("\n[Step 1] Reading chunks from GCS...")
     chunks = download_chunks(storage_client, bucket, chunks_path)
     if not chunks:
@@ -212,12 +219,23 @@ def main():
         print("   Index creation submitted (async). Build may take 30+ minutes.")
         print("   Check status in Console: Vertex AI → Vector Search.")
         print(f"   Embeddings URI: {contents_uri}")
-        # Print new index ID for config.py (VECTOR_INDEX_ID)
-        index_resource = getattr(index, "resource_name", None) or str(index)
-        print(f"   New index resource: {index_resource}")
-        if index_resource and "/indexes/" in index_resource:
-            index_id = index_resource.split("/indexes/")[-1].strip()
-            print(f"   >>> Add to config.py: VECTOR_INDEX_ID = \"{index_id}\"")
+        # With sync=False, resource_name is not available until the LRO completes; accessing it may raise.
+        index_resource = None
+        try:
+            index_resource = getattr(index, "resource_name", None) or str(index)
+        except RuntimeError as re:
+            if "has not been created" in str(re):
+                pass  # Expected when sync=False; index is still building.
+            else:
+                raise
+        if index_resource and "/indexes/" in str(index_resource):
+            index_id = index_resource.split("/indexes/")[-1].split("/")[0].strip()
+            print(f"   New index resource: {index_resource}")
+            print(f"   >>> Update config.py: VECTOR_INDEX_ID = \"{index_id}\"")
+        else:
+            print("   Once the index build completes, get the index ID from Console:")
+            print("   Vertex AI → Vector Search → your index → copy the index ID.")
+            print("   Then set in config.py: VECTOR_INDEX_ID = \"<index_id>\"")
     except Exception as e:
         print(f"   Index create failed: {e}")
         print("   Embeddings are at", contents_uri)

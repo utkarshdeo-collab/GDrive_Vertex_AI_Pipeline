@@ -1,19 +1,22 @@
 """
 Phase 1: Ingestion & Structural Parsing (Document AI)
 
-Step 1: Stream PDF from Google Drive directly to GCS (no local download).
+Step 1: Ingest PDFs into GCS — from PDF_URL_LIST (HTTP(S) URLs), Google Drive, or local file.
 Step 2: (Optional) Document AI Batch Process (Layout Parser) → structural JSON to GCS.
 Step 3: List output locations in GCS.
 
-Set in config.py:
-  DRIVE_FILE_ID = "your-drive-file-id"
-  DOCAI_PROCESSOR_ID = "your-document-ai-processor-id" (or leave empty to skip)
+Sources (first non-empty wins):
+  PDF_URL_LIST / PDF_URLS = comma-separated URLs → stream directly to config.GCS_PDF_INPUT_BUCKET
+  DRIVE_FILE_ID / DRIVE_FOLDER_ID = Google Drive
+  LOCAL_PDF_PATH = local file
 
-GCS bucket used: config.GCS_BUCKET_NAME (e.g. sym-dev-mr-agents-01-docai-staging)
+For URL streaming: config.GCS_PDF_INPUT_BUCKET (e.g. {project}-pdf-input). Others: config.GCS_BUCKET_NAME.
 """
 import io
 import os
 import sys
+from urllib.parse import urlparse, unquote
+from urllib.request import Request, urlopen
 
 import config
 from google.cloud import storage
@@ -145,7 +148,43 @@ def upload_pdf_to_gcs(storage_client, local_path, bucket_name, gcs_prefix):
     return uri
 
 
-def run_batch_process(gcs_input_uri, gcs_output_uri_prefix):
+def _filename_from_url(url: str) -> str:
+    """Get a safe filename from URL path (strip query, unquote)."""
+    parsed = urlparse(url)
+    path = parsed.path or "/document.pdf"
+    name = unquote(os.path.basename(path))
+    if not name or not name.lower().endswith(".pdf"):
+        name = name + ".pdf" if name else "document.pdf"
+    return name
+
+
+def stream_url_to_gcs(url: str, storage_client, bucket_name: str, gcs_prefix: str) -> str:
+    """Stream PDF from HTTP(S) URL to GCS. Returns gs:// URI."""
+    filename = _filename_from_url(url)
+    blob_name = f"{gcs_prefix}/{filename}"
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; DocumentPipeline/1.0)"})
+    print(f"   Streaming: {url[:70]}...")
+    with urlopen(req, timeout=120) as resp:
+        chunk_size = 8 * 1024 * 1024  # 8 MB
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        buf = io.BytesIO()
+        total = 0
+        while True:
+            chunk = resp.read(chunk_size)
+            if not chunk:
+                break
+            buf.write(chunk)
+            total += len(chunk)
+        buf.seek(0)
+        blob.upload_from_file(buf, content_type="application/pdf", rewind=True)
+    uri = f"gs://{bucket_name}/{blob_name}"
+    size_mb = total / (1024 * 1024)
+    print(f"   Uploaded: {uri} ({size_mb:.2f} MB)")
+    return uri
+
+
+def run_batch_process(gcs_input_uri, gcs_output_uri_prefix, timeout_seconds=600):
     """Submit Document AI batch process (Layout Parser). Output prefix must end with /."""
     from google.api_core.client_options import ClientOptions
     from google.cloud import documentai_v1 as documentai
@@ -187,8 +226,48 @@ def run_batch_process(gcs_input_uri, gcs_output_uri_prefix):
     operation = client.batch_process_documents(request)
     print(f"   Operation: {operation.operation.name}")
     print("   Waiting for completion (may take several minutes for large PDFs)...")
-    operation.result(timeout=600)
+    operation.result(timeout=timeout_seconds)
     return operation
+
+
+def run_sync_process(gcs_input_uri: str, gcs_output_uri_prefix: str):
+    """Process a single document with Document AI sync (online) API and write result to GCS.
+    Use when batch fails for one file. Sync has a 15-page / 20MB limit for Document OCR."""
+    from google.api_core.client_options import ClientOptions
+    from google.cloud import documentai_v1 as documentai
+    from google.protobuf import json_format
+
+    opts = ClientOptions(
+        api_endpoint=f"{config.DOCAI_LOCATION}-documentai.googleapis.com"
+    )
+    client = documentai.DocumentProcessorServiceClient(client_options=opts)
+    name = client.processor_path(
+        config.PROJECT_ID,
+        config.DOCAI_LOCATION,
+        config.DOCAI_PROCESSOR_ID,
+    )
+    request = documentai.ProcessRequest(
+        name=name,
+        gcs_document=documentai.GcsDocument(
+            gcs_uri=gcs_input_uri,
+            mime_type="application/pdf",
+        ),
+    )
+    print("   Submitting sync (online) process...")
+    response = client.process_document(request=request)
+    prefix = gcs_output_uri_prefix.rstrip("/") + "/"
+    if not prefix.startswith("gs://"):
+        raise ValueError("gcs_output_uri_prefix must be a gs:// URI")
+    parts = prefix[5:].split("/", 1)
+    bucket_name, path_prefix = parts[0], parts[1]
+    blob_name = f"{path_prefix}document.json"
+    json_str = json_format.MessageToJson(response.document)
+    storage_client = storage.Client(project=config.PROJECT_ID)
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    blob.upload_from_string(json_str, content_type="application/json")
+    print(f"   Uploaded: gs://{bucket_name}/{blob_name}")
+    return response
 
 
 def print_output_locations():
@@ -210,7 +289,7 @@ def print_output_locations():
 
 def main():
     print("\n" + "=" * 60)
-    print("  PHASE 1: Ingestion (Drive → GCS)")
+    print("  PHASE 1: Ingestion (PDFs → GCS)")
     print("=" * 60)
     print(f"\n  Project: {config.PROJECT_ID}")
     print(f"  Bucket:  {config.GCS_BUCKET_NAME}")
@@ -229,12 +308,48 @@ def main():
         print(f"  gcloud config set project {config.PROJECT_ID}")
         sys.exit(1)
 
-    # Ensure bucket exists
-    print("\n[Step 1] Ensuring GCS bucket exists...")
-    ensure_bucket(storage_client, config.GCS_BUCKET_NAME)
+    # Ensure bucket: PDF URL path uses dedicated bucket; Drive/local use staging bucket
+    if config.PDF_URL_LIST:
+        bucket_name = getattr(config, "GCS_PDF_INPUT_BUCKET", config.GCS_BUCKET_NAME)
+        print("\n[Step 1] Ensuring PDF bucket exists...")
+        ensure_bucket(storage_client, bucket_name)
+    else:
+        print("\n[Step 1] Ensuring GCS bucket exists...")
+        ensure_bucket(storage_client, config.GCS_BUCKET_NAME)
 
-    # Step 2: Stream PDF from Drive to GCS
-    if config.DRIVE_FILE_ID:
+    # Step 2: Ingest PDFs into GCS (URLs > Drive > local)
+    num_pdfs_uploaded = 1
+    if config.PDF_URL_LIST:
+        bucket_name = getattr(config, "GCS_PDF_INPUT_BUCKET", config.GCS_BUCKET_NAME)
+        print("\n[Step 2] Streaming PDFs from URLs to GCS (no local download)...")
+        gcs_uris = []
+        failed = []
+        for i, url in enumerate(config.PDF_URL_LIST, 1):
+            filename = _filename_from_url(url)
+            print(f"\n   ({i}/{len(config.PDF_URL_LIST)}) {filename}")
+            try:
+                uri = stream_url_to_gcs(
+                    url,
+                    storage_client,
+                    bucket_name,
+                    config.GCS_INPUT_PREFIX,
+                )
+                gcs_uris.append(uri)
+            except Exception as e:
+                failed.append((filename, url, str(e)))
+                print(f"   [SKIP] {filename}: {e}")
+                print(f"   Logged; continuing with next URL.")
+        if failed:
+            print(f"\n   Failed ({len(failed)}):")
+            for fn, u, err in failed:
+                print(f"      - {fn}: {err}")
+        if not gcs_uris:
+            print("\nERROR: No PDFs were uploaded. Fix URLs or network and retry.")
+            sys.exit(1)
+        gcs_input_uri = gcs_uris[0]
+        num_pdfs_uploaded = len(gcs_uris)
+        print(f"\n   Total uploaded: {num_pdfs_uploaded} PDF(s) to gs://{bucket_name}/{config.GCS_INPUT_PREFIX}/")
+    elif config.DRIVE_FILE_ID:
         print("\n[Step 2] Streaming PDF from Google Drive to GCS...")
         service = get_drive_service()
         try:
@@ -291,8 +406,8 @@ def main():
             config.GCS_INPUT_PREFIX,
         )
 
-    # Step 3: Document AI batch process (optional)
-    if config.DOCAI_PROCESSOR_ID:
+    # Step 3: Document AI batch process (optional; single-file only)
+    if config.DOCAI_PROCESSOR_ID and not config.PDF_URL_LIST:
         # Import Document AI only if needed
         from google.cloud import documentai_v1 as documentai
         gcs_output_prefix = f"gs://{config.GCS_BUCKET_NAME}/{config.GCS_OUTPUT_PREFIX}"
@@ -302,14 +417,19 @@ def main():
         # Step 4: Output locations
         print("\n[Step 4] Output locations:")
         print_output_locations()
+    elif config.PDF_URL_LIST:
+        print("\n[Step 3] Streaming-only run: PDFs are in GCS. Chunking/indexing in a later step.")
     else:
-        print("\n[Step 3] Skipping Document AI (DOCAI_PROCESSOR_ID not set)")
-        print("   PDF uploaded to GCS successfully.")
+        print("\n[Step 3] Skipping Document AI (DOCAI_PROCESSOR_ID not set). PDF(s) uploaded to GCS.")
         print("   To run Document AI later, set DOCAI_PROCESSOR_ID in config.py")
 
     print("\n" + "=" * 60)
     print("  Phase 1 complete!")
-    print(f"  PDF location: {gcs_input_uri}")
+    if config.PDF_URL_LIST:
+        pdf_bucket = getattr(config, "GCS_PDF_INPUT_BUCKET", config.GCS_BUCKET_NAME)
+        print(f"  PDFs in GCS: gs://{pdf_bucket}/{config.GCS_INPUT_PREFIX}/ ({num_pdfs_uploaded} file(s))")
+    else:
+        print(f"  PDF location: {gcs_input_uri}")
     print("=" * 60 + "\n")
 
 

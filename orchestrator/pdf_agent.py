@@ -40,7 +40,8 @@ def _load_chunks():
     global _chunk_cache
     if _chunk_cache is not None:
         return _chunk_cache
-    bucket = storage.Client(project=config.PROJECT_ID).bucket(config.GCS_BUCKET_NAME)
+    chunks_bucket = getattr(config, "CHUNKS_BUCKET", config.GCS_BUCKET_NAME)
+    bucket = storage.Client(project=config.PROJECT_ID).bucket(chunks_bucket)
     blob = bucket.blob(f"{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl")
     if not blob.exists():
         return {}
@@ -63,21 +64,25 @@ def _get_embedding_model():
 
 
 def _get_endpoint():
-    """Get the index endpoint by display name (same as deploy script)."""
+    """Get the index endpoint by display name (case-insensitive)."""
     global _endpoint
     if _endpoint is None:
         aiplatform.init(project=config.PROJECT_ID, location=config.LOCATION)
         endpoints = list(matching_engine.MatchingEngineIndexEndpoint.list())
+        target = (config.INDEX_ENDPOINT_DISPLAY_NAME or "").strip()
         resource_name = None
         for ep in endpoints:
-            name = getattr(getattr(ep, "_gca_resource", None), "display_name", None)
-            if name == config.INDEX_ENDPOINT_DISPLAY_NAME:
+            name = getattr(getattr(ep, "_gca_resource", None), "display_name", None) or ""
+            if name.strip().lower() == target.lower():
                 resource_name = ep.resource_name
                 break
         if resource_name is None:
+            available = [getattr(getattr(ep, "_gca_resource", None), "display_name", None) for ep in endpoints]
+            available = [n for n in available if n]
             raise RuntimeError(
                 f"No index endpoint with display name '{config.INDEX_ENDPOINT_DISPLAY_NAME}' found. "
-                "Create one in Console (Vector Search → Index Endpoints) or run phase4_deploy_index.py."
+                f"Available in {config.LOCATION}: {available or '(none)'}. "
+                "Set INDEX_ENDPOINT_DISPLAY_NAME in config.py to one of these."
             )
         _endpoint = MatchingEngineIndexEndpoint(resource_name)
     return _endpoint
@@ -106,7 +111,7 @@ def _search_document_impl(query: str, top_k: int) -> dict:
     print(">>> [1] Loading chunks...", flush=True)
     id_to_text = _load_chunks()
     if not id_to_text:
-        print(f">>> [1] No chunks loaded from gs://{config.GCS_BUCKET_NAME}/{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl", flush=True)
+        print(f">>> [1] No chunks loaded from gs://{getattr(config, 'CHUNKS_BUCKET', config.GCS_BUCKET_NAME)}/{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl", flush=True)
         return {"context": "", "error": "No chunks loaded. Run Phase 2 first."}
     print(f">>> [1] Loaded {len(id_to_text)} chunks", flush=True)
 
@@ -262,9 +267,13 @@ def create_pdf_agent():
     return LlmAgent(
         model=model,
         name="pdf_agent",
-        instruction="""You answer questions about uploaded documents and PDFs.
-Use the search_document tool to find relevant passages. You may call it multiple times with different search terms (e.g. "lessons learned", "infrastructure") if the question has several parts.
-Answer ONLY from the retrieved context. Quote specific numbers and facts.
-If the search returns nothing useful or part of the question is not in the retrieved passages, say "The document does not contain this information" or "The retrieved passages do not contain this." Do not refer to Salesforce or BigQuery.""",
+        instruction="""You answer questions using only the documents we have indexed. Use the search_document tool to find relevant passages; you may call it multiple times with different search terms if needed.
+
+Rules:
+- Answer ONLY from the retrieved context. Do not invent or assume information.
+- If the search returns no relevant passages, or the retrieved text does not contain the answer, respond clearly with: "This information is not available in the documents we have." or "We don't have that information in our documents."
+- If only part of the question can be answered from the documents, answer that part and say what we don't have (e.g. "We have X in our documents, but we don't have information about Y.").
+- Quote specific numbers and facts when the documents support them.
+- Do not refer to Salesforce or BigQuery unless the user asks about them.""",
         tools=[search_document],
     )

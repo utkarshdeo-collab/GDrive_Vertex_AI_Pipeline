@@ -32,7 +32,7 @@ _embedding_model = None
 _endpoint = None
 
 MAX_CONTEXT_CHARS = 80_000
-DEFAULT_TOP_K = 50
+DEFAULT_TOP_K = 80
 
 
 def _load_chunks():
@@ -40,7 +40,8 @@ def _load_chunks():
     global _chunk_cache
     if _chunk_cache is not None:
         return _chunk_cache
-    bucket = storage.Client(project=config.PROJECT_ID).bucket(config.GCS_BUCKET_NAME)
+    chunks_bucket = getattr(config, "CHUNKS_BUCKET", config.GCS_BUCKET_NAME)
+    bucket = storage.Client(project=config.PROJECT_ID).bucket(chunks_bucket)
     blob = bucket.blob(f"{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl")
     if not blob.exists():
         return {}
@@ -63,23 +64,26 @@ def _get_embedding_model():
 
 
 def _get_endpoint():
-    """Get the index endpoint by display name (same as deploy script) so we use the endpoint that has the deployment."""
+    """Get the index endpoint by display name (case-insensitive)."""
     global _endpoint
     if _endpoint is None:
         aiplatform.init(project=config.PROJECT_ID, location=config.LOCATION)
         endpoints = list(matching_engine.MatchingEngineIndexEndpoint.list())
+        target = (config.INDEX_ENDPOINT_DISPLAY_NAME or "").strip()
         resource_name = None
         for ep in endpoints:
-            name = getattr(getattr(ep, "_gca_resource", None), "display_name", None)
-            if name == config.INDEX_ENDPOINT_DISPLAY_NAME:
+            name = getattr(getattr(ep, "_gca_resource", None), "display_name", None) or ""
+            if name.strip().lower() == target.lower():
                 resource_name = ep.resource_name
                 break
         if resource_name is None:
+            available = [getattr(getattr(ep, "_gca_resource", None), "display_name", None) for ep in endpoints]
+            available = [n for n in available if n]
             raise RuntimeError(
                 f"No index endpoint with display name '{config.INDEX_ENDPOINT_DISPLAY_NAME}' found. "
-                "Create one in Console (Vector Search → Index Endpoints) or run phase4_deploy_index.py."
+                f"Available in {config.LOCATION}: {available or '(none)'}. "
+                "Set INDEX_ENDPOINT_DISPLAY_NAME in config.py to one of these, or create an endpoint in Console (Vector Search → Index Endpoints)."
             )
-        # Create a fresh endpoint object so the match client is properly initialized
         _endpoint = MatchingEngineIndexEndpoint(resource_name)
     return _endpoint
 
@@ -110,7 +114,7 @@ def _search_document_impl(query: str, top_k: int) -> dict:
     print(">>> [1] Loading chunks...", flush=True)
     id_to_text = _load_chunks()
     if not id_to_text:
-        print(f">>> [1] No chunks loaded from gs://{config.GCS_BUCKET_NAME}/{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl", flush=True)
+        print(f">>> [1] No chunks loaded from gs://{getattr(config, 'CHUNKS_BUCKET', config.GCS_BUCKET_NAME)}/{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl", flush=True)
         return {"context": "", "error": "No chunks loaded. Run Phase 2 first."}
     print(f">>> [1] Loaded {len(id_to_text)} chunks", flush=True)
 
@@ -184,7 +188,7 @@ def _search_document_impl(query: str, top_k: int) -> dict:
         return {
             "context": "",
             "num_passages": 0,
-            "error": f"Vector search returned {len(neighbors)} neighbors but none matched chunks in GCS. Chunk cache size: {len(id_to_text)}. Sample neighbor IDs: {sample_ids}. Check that chunks at gs://{config.GCS_BUCKET_NAME}/{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl match the indexed index (same Phase 2 run as Phase 3).",
+            "error": f"Vector search returned {len(neighbors)} neighbors but none matched chunks in GCS. Chunk cache size: {len(id_to_text)}. Sample neighbor IDs: {sample_ids}. Check that chunks at gs://{getattr(config, 'CHUNKS_BUCKET', config.GCS_BUCKET_NAME)}/{config.CHUNK_OUTPUT_PREFIX}/chunks.jsonl match the indexed index (same Phase 2 run as Phase 3).",
         }
     if not context and not neighbors:
         print(f"--- RETRIEVAL DEBUG: Vector search returned 0 neighbors ---\n", flush=True)
@@ -202,6 +206,8 @@ def _extract_search_terms(question: str) -> list:
     
     # Keyword to table/section mapping for targeted searches
     keyword_mappings = {
+        "feature": ["Key features and functionality", "Symphony for Insurance features", "Preferred channels Virtual number Contact onboarding"],
+        "functionality": ["Key features and functionality", "Symphony for Insurance"],
         "overtime": ["Monthly Performance Trajectory", "staff overtime hours baseline", "overtime reduction goal"],
         "telehealth": ["Technology Stack", "Telehealth Platform cost", "Zoom for Healthcare"],
         "staff resistance": ["Implementation Challenges and Resolutions", "Staff Resistance resolution strategy"],
@@ -245,7 +251,7 @@ def comprehensive_search(question: str) -> str:
     seen_passages = set()
     
     for term in search_terms:
-        result = search_document(term, top_k=30)
+        result = search_document(term, top_k=60)
         context = result.get("context", "")
         if context:
             # Add unique passages only
