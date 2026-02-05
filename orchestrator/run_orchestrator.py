@@ -85,11 +85,13 @@ _SALESFORCE_KEYWORDS = (
 )
 
 # Keywords that indicate the question is about Domo/BigQuery (not the PDF or Salesforce).
-# Include user/person-style questions (first_name, last_name, company in domo_export).
+# Domo = aggregate/count by owner (num_Total_accounts, Health_Score). Do NOT include "account owner"
+# so that "Who is the account owner for ABC Capital?" routes to Salesforce (single-account lookup).
 _DOMO_KEYWORDS = (
-    "domo", "domo_test_dataset", "domo data", "domo dataset",
-    "first name", "last name", "user with", "company of the user", "person named",
-    "first_name", "last_name",
+    "domo", "domo_test_dataset", "domo_test", "domo data", "domo dataset",
+    "health score", "health_score", "num_total_accounts",
+    "total accounts", "accounts owned", "owned by",
+    "how many total accounts", "how many accounts",
 )
 
 # Keywords that indicate the question is about the UPLOADED DOCUMENT/PDF only
@@ -120,11 +122,13 @@ def _is_likely_domo_question(text: str) -> bool:
 
 
 def _maybe_add_routing_hint(user_message: str) -> str:
-    """Prepend a routing hint so the master delegates to the correct sub-agent."""
-    if _is_likely_salesforce_question(user_message):
+    """Prepend a routing hint so the master delegates to the correct sub-agent.
+    Check Domo before Salesforce so questions like 'how many total accounts owned by X'
+    route to domo_agent (num_Total_accounts, Account_Owner in domo_test), not salesforce_agent."""
+    if _is_likely_document_question(user_message):
         return (
-            "[ROUTING: This question is about Salesforce/BigQuery data (e.g. ARR, customers, opportunities). "
-            "You MUST delegate to salesforce_agent only.]\n\n"
+            "[ROUTING: This question is about the UPLOADED DOCUMENT or PDF (implementation, budget, lessons learned, etc.). "
+            "You MUST delegate to pdf_agent only.]\n\n"
             + user_message
         )
     if _is_likely_domo_question(user_message):
@@ -133,10 +137,10 @@ def _maybe_add_routing_hint(user_message: str) -> str:
             "You MUST delegate to domo_agent only.]\n\n"
             + user_message
         )
-    if _is_likely_document_question(user_message):
+    if _is_likely_salesforce_question(user_message):
         return (
-            "[ROUTING: This question is about the UPLOADED DOCUMENT or PDF (implementation, budget, lessons learned, etc.). "
-            "You MUST delegate to pdf_agent only.]\n\n"
+            "[ROUTING: This question is about Salesforce/BigQuery data (e.g. ARR, customers, opportunities). "
+            "You MUST delegate to salesforce_agent only.]\n\n"
             + user_message
         )
     return user_message
@@ -216,7 +220,7 @@ ROUTING RULES:
 - If the user message starts with "[ROUTING: ... pdf_agent only.]": you MUST delegate to pdf_agent (do not use salesforce_agent or domo_agent).
 - If the question is about the UPLOADED DOCUMENT or PDF (reports, case studies, implementation cost, change management, budget, lessons learned, post-implementation, executive summary, tables in the document): delegate to pdf_agent.
 - If the question is about SALESFORCE or BIGQUERY data (ARR, pipeline, opportunities, customers, licenses, Total_ARR, Customer_Name, Opportunity_Name, Stage, CloseDate, nexus_data, or any Salesforce tables/columns above): delegate to salesforce_agent.
-- If the question is about DOMO or BIGQUERY data (domo_test_dataset, or any Domo tables/columns above): delegate to domo_agent.
+- If the question is about DOMO or BIGQUERY data (domo_test_dataset, domo_test, or any Domo tables/columns above): delegate to domo_agent. This includes "how many total accounts (are) owned by [person]" or aggregate counts per owner (num_Total_accounts). For "who is the account owner for [specific account name]" (e.g. ABC Capital) or single-account lookup by customer name, use salesforce_agent, not domo_agent.
 - If the question clearly needs MULTIPLE data sources (document + Salesforce + Domo) in one question: do NOT call multiple agents. Reply with exactly: "Please ask about the document, Salesforce data, or Domo data separately."
 
 Always delegate to exactly one sub-agent (pdf_agent, salesforce_agent, or domo_agent). After you get the answer, present it clearly to the user. Do not mention "Salesforce data" when the user asked about the document or Domo."""

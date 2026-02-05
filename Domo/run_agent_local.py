@@ -145,18 +145,18 @@ RULES:
 2. ALWAYS call execute_sql
 3. NEVER answer without executing SQL
 4. Use fully qualified table names:
-   `{PROJECT_ID}.domo_test_dataset.domo_export`
+   `{PROJECT_ID}.domo_test_dataset.domo_test`
 5. CAST DATE and TIMESTAMP to STRING
 6. Writes are forbidden
 
 Examples:
 - Count rows:
-  SELECT COUNT(*) AS total FROM `{PROJECT_ID}.domo_test_dataset.domo_export`
+  SELECT COUNT(*) AS total FROM `{PROJECT_ID}.domo_test_dataset.domo_test`
 
-- Filter:
-  SELECT company
-  FROM `{PROJECT_ID}.domo_test_dataset.domo_export`
-  WHERE first_name = 'Shane'
+- Filter by account owner or month:
+  SELECT Month, Account_Owner, num_Total_accounts, `0_Health_Score`
+  FROM `{PROJECT_ID}.domo_test_dataset.domo_test`
+  WHERE Account_Owner = 'Some Owner'
 """
 
     agent = LlmAgent(
