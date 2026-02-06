@@ -89,33 +89,19 @@
           ]
         },
         {
-          "table_id": "dummy_account_info",
-          "row_count": 0,
+          "table_id": "account_info",
+          "row_count": null,
           "schema": [
-            {
-              "column_name": "Customer_Name",
-              "data_type": "STRING",
-              "mode": "NULLABLE",
-              "description": null
-            },
-            {
-              "column_name": "Total_ARR",
-              "data_type": "FLOAT",
-              "mode": "NULLABLE",
-              "description": null
-            },
-            {
-              "column_name": "Renewal_Date",
-              "data_type": "STRING",
-              "mode": "NULLABLE",
-              "description": null
-            },
-            {
-              "column_name": "Account_Owner",
-              "data_type": "STRING",
-              "mode": "NULLABLE",
-              "description": null
-            }
+            {"column_name": "Salesforce_Account_ID", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Account_Owner", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Contract_End_Date", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Total_ARR", "data_type": "FLOAT", "mode": "NULLABLE", "description": null},
+            {"column_name": "Client_Engagement_Lead", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Renewal_Date", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Customer_Name", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Firm_ID", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "POD_Internal_Id__c", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Due_Date", "data_type": "STRING", "mode": "NULLABLE", "description": null}
           ],
           "sample_rows": []
         },

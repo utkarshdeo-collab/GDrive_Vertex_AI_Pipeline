@@ -82,16 +82,22 @@ _SALESFORCE_KEYWORDS = (
     "stage", "closed won", "close date", "owner", "contracted", "antino bank",
     "abc capital", "sf_account", "sf_opportunity",
     "snapshot", "all accounts", "commercial snapshot", "account overview",
+    "nexus snapshot", "nexus account", "orbit score", "meau", "churn risk",
+    "account for", "tell me about account",
 )
 
 # Keywords that indicate the question is about Domo/BigQuery (not the PDF or Salesforce).
-# Domo = aggregate/count by owner (num_Total_accounts, Health_Score). Do NOT include "account owner"
-# so that "Who is the account owner for ABC Capital?" routes to Salesforce (single-account lookup).
+# Domo = domo_test_dataset, test_pod — usage metrics, health scores, avg daily message, etc.
+# Do NOT include "account owner" so that "Who is the account owner for ABC Capital?" routes to Salesforce.
 _DOMO_KEYWORDS = (
     "domo", "domo_test_dataset", "domo_test", "domo data", "domo dataset",
     "health score", "health_score", "num_total_accounts",
     "total accounts", "accounts owned", "owned by",
     "how many total accounts", "how many accounts",
+    "average daily message", "avg_daily_msg_sent", "avg daily message",
+    "message sent", "daily message", "messages sent",
+    "active users", "provisioned users", "power users",
+    "test_pod", "pretty_name", "att_sent",
 )
 
 # Keywords that indicate the question is about the UPLOADED DOCUMENT/PDF only.
@@ -224,7 +230,7 @@ ROUTING RULES:
 - If the question is about the UPLOADED DOCUMENT or PDF (reports, case studies, implementation cost, change management, budget, lessons learned, post-implementation, executive summary, tables in the document): delegate to pdf_agent.
 - If the user asks for a summary or content of a NAMED document (e.g. SYM_1PGR_Insurance, SYM_1PGR_Federation, InsurTech, ARK Capital Case Study, Symphony for Wealth/Insurance, or any report/document title): delegate to pdf_agent. These are indexed PDF documents, not Domo or Salesforce data.
 - If the question is about SALESFORCE or BIGQUERY data (ARR, pipeline, opportunities, customers, licenses, Total_ARR, Customer_Name, Opportunity_Name, Stage, CloseDate, nexus_data, or any Salesforce tables/columns above): delegate to salesforce_agent.
-- If the question is about DOMO or BIGQUERY data (domo_test_dataset, domo_test, or any Domo tables/columns above): delegate to domo_agent. This includes "how many total accounts (are) owned by [person]" or aggregate counts per owner (num_Total_accounts). For "who is the account owner for [specific account name]" (e.g. ABC Capital) or single-account lookup by customer name, use salesforce_agent, not domo_agent.
+- If the question is about DOMO or BIGQUERY data (domo_test_dataset, domo_test, test_pod, or any Domo tables/columns above): delegate to domo_agent. This includes: "how many total accounts owned by [person]", aggregate counts (num_Total_accounts), usage metrics (average daily message sent, avg_daily_msg_sent, active users, provisioned users, messages sent) for an account like Symphony1, health scores. For "who is the account owner for [specific account name]" (e.g. ABC Capital) or single-account lookup by customer name, use salesforce_agent, not domo_agent.
 - If the question clearly needs MULTIPLE data sources (document + Salesforce + Domo) in one question: do NOT call multiple agents. Reply with exactly: "Please ask about the document, Salesforce data, or Domo data separately."
 
 Always delegate to exactly one sub-agent (pdf_agent, salesforce_agent, or domo_agent). After you get the answer, present it clearly to the user. Do not mention "Salesforce data" when the user asked about the document or Domo."""

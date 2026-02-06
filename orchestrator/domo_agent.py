@@ -122,7 +122,9 @@ def create_domo_agent(credentials):
     instruction = f"""You answer questions about Domo data stored in BigQuery.
 {schema_context}
 Use the execute_sql tool to query data. Always use fully qualified names: `{config.PROJECT_ID}.domo_test_dataset.TABLE_NAME`.
-Return clear summaries and numbers. Do not run write/delete statements."""
+Return clear summaries and numbers. Do not run write/delete statements.
+
+USAGE METRICS (test_pod): For questions about "average daily message sent", "avg_daily_msg_sent", "messages sent" for an account (e.g. Symphony1), query test_pod: SELECT pretty_name, avg_daily_msg_sent FROM `{config.PROJECT_ID}.domo_test_dataset.test_pod` WHERE LOWER(pretty_name) LIKE '%account_name%'. Use pretty_name to match account names."""
 
     return LlmAgent(
         model=model,

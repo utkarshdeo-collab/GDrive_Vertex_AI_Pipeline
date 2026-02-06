@@ -7,6 +7,7 @@ Uses a custom execute_sql tool that records BigQuery bytes for cost display.
 """
 import json
 import sys
+from datetime import date, datetime
 from pathlib import Path
 
 # Ensure project root is on path (for config)
@@ -28,6 +29,43 @@ _MAX_QUERY_ROWS = 1000
 
 # Credentials for BigQuery (set by create_salesforce_agent so tool uses same creds as orchestrator)
 _bq_credentials = None
+
+
+def _engagement_from_due_date(due_date_val) -> str:
+    """Compute Engagement string from Due_Date. If Due_Date >= 4 days ago: 'Meeting X days ago. Sentiment: Positive.' else 'Sentiment: Negative.'"""
+    if due_date_val is None or (isinstance(due_date_val, str) and not due_date_val.strip()):
+        return "Engagement: N/A"
+    today = date.today()
+    try:
+        if isinstance(due_date_val, datetime):
+            due_dt = due_date_val.date()
+        elif isinstance(due_date_val, date):
+            due_dt = due_date_val
+        else:
+            s = str(due_date_val).strip()
+            for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y", "%m-%d-%Y", "%m/%d/%Y"):
+                try:
+                    due_dt = datetime.strptime(s[:10], fmt).date()
+                    break
+                except ValueError:
+                    continue
+            else:
+                return "Engagement: N/A"
+        days_ago = (today - due_dt).days
+        if days_ago < 0:
+            return "Engagement: N/A"
+        if days_ago == 0:
+            day_str = "today"
+        elif days_ago == 1:
+            day_str = "1 day ago"
+        else:
+            day_str = f"{days_ago} days ago"
+        if days_ago >= 4:
+            return f"Engagement: Meeting {day_str}. Sentiment: Positive."
+        else:
+            return f"Engagement: Meeting {day_str}. Sentiment: Negative."
+    except (ValueError, TypeError, AttributeError):
+        return "Engagement: N/A"
 
 
 def execute_sql(project_id: str, query: str) -> dict:
@@ -86,6 +124,227 @@ def execute_sql(project_id: str, query: str) -> dict:
         return {"status": "ERROR", "error_details": str(ex)}
 
 
+def get_nexus_account_snapshot(account_name: str) -> str:
+    """Fetch Nexus Account Snapshot for a specific account. Queries account_info (Salesforce) for
+    commercial data and test_pod (Domo) for MEAU, ORBIT score, and Churn Risk. Returns formatted
+    snapshot in the Nexus Account Snapshot format. Use when user asks for account snapshot/overview
+    for a specific account (e.g. 'account for ABC Capital', 'snapshot for Antino Bank')."""
+    from .usage_collector import record_bigquery
+    import google.auth
+    try:
+        creds = _bq_credentials
+        if creds is None:
+            creds, _ = google.auth.default()
+        client = bigquery.Client(project=config.PROJECT_ID, credentials=creds)
+
+        # 1) Commercial from account_info (must use account_info for POD_Internal_Id__c mapping)
+        safe_name = account_name.replace("'", "''")
+        q_account = f"""
+        SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner, POD_Internal_Id__c, Due_Date
+        FROM `{config.PROJECT_ID}.nexus_data.account_info`
+        WHERE LOWER(TRIM(Customer_Name)) LIKE LOWER(TRIM('%{safe_name}%'))
+        LIMIT 1
+        """
+        commercial_rows = []
+        pod_rows = []
+        pod_internal_id = None
+        try:
+            job = client.query(q_account, project=config.PROJECT_ID)
+            commercial_rows = list(job.result(max_results=1))
+            record_bigquery(job.total_bytes_processed or 0)
+            if commercial_rows:
+                pod_internal_id = commercial_rows[0].get("POD_Internal_Id__c")
+        except Exception:
+            pass
+
+        # 2) MEAU, ORBIT (health_score), Churn from test_pod — mapped via POD_Internal_Id__c = pod_id
+        if pod_internal_id is not None and str(pod_internal_id).strip():
+            # POD_Internal_Id__c is STRING, pod_id is INTEGER
+            try:
+                pod_id_int = int(float(str(pod_internal_id).strip()))
+                q_pod = f"""
+                SELECT pretty_name, meau, provisioned_users, active_users, health_score,
+                       risk_ratio_for_next_renewal
+                FROM `{config.PROJECT_ID}.domo_test_dataset.test_pod`
+                WHERE pod_id = {pod_id_int}
+                ORDER BY `month` DESC
+                LIMIT 1
+                """
+                job = client.query(q_pod, project=config.PROJECT_ID)
+                pod_rows = list(job.result(max_results=1))
+                record_bigquery(job.total_bytes_processed or 0)
+            except (ValueError, TypeError):
+                pass
+            except Exception:
+                pass
+
+        # Format output
+        client_name = account_name
+        parts = []
+
+        # Commercial
+        if commercial_rows:
+            r = commercial_rows[0]
+            client_name = str(r.get("Customer_Name") or account_name)
+            arr = r.get("Total_ARR")
+            renewal = r.get("Renewal_Date") or "N/A"
+            owner = r.get("Account_Owner") or "N/A"
+            arr_str = f"${int(arr):,}" if arr is not None and arr != "" else "N/A"
+            parts.append(f"• Commercial: {arr_str} ARR | Renewal: {renewal} | Owner: {owner}")
+        else:
+            parts.append("• Commercial: No record found in account_info.")
+
+        # Adoption — N/A for now
+        parts.append("• Adoption: N/A")
+
+        # MEAU — show only the raw MEAU value
+        pod = pod_rows[0] if pod_rows else {}
+        meau_val = pod.get("meau")
+        if meau_val is not None:
+            parts.append(f"• MEAU: {meau_val}")
+        else:
+            parts.append("• MEAU: N/A")
+
+        # Support placeholder
+        parts.append("• Support: N/A (no Jira linkage in data)")
+
+        # Engagement from Due_Date: >= 4 days ago → Positive, else Negative
+        due_date = commercial_rows[0].get("Due_Date") if commercial_rows else None
+        parts.append(f"• {_engagement_from_due_date(due_date)}")
+
+        # Summary & Insights — ORBIT score = health_score from test_pod (Domo)
+        orbit = pod.get("health_score")
+        risk = pod.get("risk_ratio_for_next_renewal")
+        insights = []
+        if orbit is not None:
+            insights.append(f"○ ORBIT score: {orbit}")
+        else:
+            insights.append("○ ORBIT score: N/A")
+        if risk is not None:
+            insights.append(f"○ Churn Risk: {risk}")
+        else:
+            insights.append("○ Churn Risk: N/A")
+        insights.append("○ Support Escalation: N/A")
+        insights.append("○ Expansion Signal: N/A")
+        insights.append("○ Suggested Action: N/A")
+        parts.append("• Summary & Insights:")
+        parts.append("\n  ".join(insights))
+
+        return f"Nexus Account Snapshot: {client_name}\n\n" + "\n".join(parts)
+    except Exception as ex:
+        return f"Error fetching Nexus Account Snapshot: {ex}"
+
+
+def _format_single_snapshot(client_name: str, account_row: dict, pod_row: dict) -> str:
+    """Format one account's snapshot (Commercial, MEAU, ORBIT, Churn Risk)."""
+    parts = []
+    arr = account_row.get("Total_ARR")
+    renewal = account_row.get("Renewal_Date") or "N/A"
+    owner = account_row.get("Account_Owner") or "N/A"
+    arr_str = f"${int(arr):,}" if arr is not None and arr != "" else "N/A"
+    parts.append(f"• Commercial: {arr_str} ARR | Renewal: {renewal} | Owner: {owner}")
+    parts.append("• Adoption: N/A")
+    meau_val = pod_row.get("meau") if pod_row else None
+    parts.append(f"• MEAU: {meau_val}" if meau_val is not None else "• MEAU: N/A")
+    parts.append("• Support: N/A (no Jira linkage in data)")
+    due_date = account_row.get("Due_Date")
+    parts.append(f"• {_engagement_from_due_date(due_date)}")
+    orbit = pod_row.get("health_score") if pod_row else None
+    risk = pod_row.get("risk_ratio_for_next_renewal") if pod_row else None
+    insights = []
+    insights.append(f"○ ORBIT score: {orbit}" if orbit is not None else "○ ORBIT score: N/A")
+    if risk is not None and isinstance(risk, (int, float)):
+        risk_pct = risk if risk > 1 else risk * 100
+        insights.append(f"○ Churn Risk: {risk_pct:.1f}% (risk_ratio_for_next_renewal)")
+    elif risk is not None:
+        insights.append(f"○ Churn Risk: {risk}")
+    else:
+        insights.append("○ Churn Risk: N/A")
+    insights.extend(["○ Support Escalation: N/A", "○ Expansion Signal: N/A", "○ Suggested Action: N/A"])
+    parts.append("• Summary & Insights:")
+    parts.append("\n  ".join(insights))
+    return f"Nexus Account Snapshot: {client_name}\n\n" + "\n".join(parts)
+
+
+def get_all_nexus_account_snapshots() -> str:
+    """Fetch Nexus Account Snapshot for ALL accounts. Queries account_info and maps to test_pod
+    via POD_Internal_Id__c = pod_id. Returns full snapshot (Commercial, MEAU, ORBIT, Churn Risk)
+    for each account. Use when user asks for 'snapshot of all accounts', 'all accounts snapshot',
+    'give me all accounts', etc."""
+    from .usage_collector import record_bigquery
+    import google.auth
+    try:
+        creds = _bq_credentials
+        if creds is None:
+            creds, _ = google.auth.default()
+        client = bigquery.Client(project=config.PROJECT_ID, credentials=creds)
+
+        # 1) All accounts from account_info
+        q_account = f"""
+        SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner, POD_Internal_Id__c, Due_Date
+        FROM `{config.PROJECT_ID}.nexus_data.account_info`
+        ORDER BY Customer_Name
+        """
+        account_rows = []
+        try:
+            job = client.query(q_account, project=config.PROJECT_ID)
+            account_rows = list(job.result(max_results=500))
+            record_bigquery(job.total_bytes_processed or 0)
+        except Exception as ex:
+            return f"Error fetching accounts: {ex}"
+
+        if not account_rows:
+            return "No accounts found in account_info."
+
+        # 2) Collect valid pod_ids and fetch test_pod data
+        pod_ids = []
+        for r in account_rows:
+            pid = r.get("POD_Internal_Id__c")
+            if pid is not None and str(pid).strip():
+                try:
+                    pod_ids.append(int(float(str(pid).strip())))
+                except (ValueError, TypeError):
+                    pass
+        pod_id_to_row = {}
+        if pod_ids:
+            ids_str = ",".join(str(i) for i in pod_ids)
+            q_pod = f"""
+            SELECT pod_id, meau, health_score, risk_ratio_for_next_renewal
+            FROM (
+                SELECT pod_id, meau, health_score, risk_ratio_for_next_renewal, `month`,
+                       ROW_NUMBER() OVER (PARTITION BY pod_id ORDER BY `month` DESC) as rn
+                FROM `{config.PROJECT_ID}.domo_test_dataset.test_pod`
+                WHERE pod_id IN ({ids_str})
+            )
+            WHERE rn = 1
+            """
+            try:
+                job = client.query(q_pod, project=config.PROJECT_ID)
+                for row in job.result(max_results=500):
+                    pod_id_to_row[row["pod_id"]] = dict(row)
+                record_bigquery(job.total_bytes_processed or 0)
+            except Exception:
+                pass
+
+        # 3) Format each account
+        outputs = []
+        for r in account_rows:
+            client_name = str(r.get("Customer_Name") or "Unknown")
+            pod_id_val = r.get("POD_Internal_Id__c")
+            pod_row = None
+            if pod_id_val is not None and str(pod_id_val).strip():
+                try:
+                    pid = int(float(str(pod_id_val).strip()))
+                    pod_row = pod_id_to_row.get(pid)
+                except (ValueError, TypeError):
+                    pass
+            outputs.append(_format_single_snapshot(client_name, r, pod_row))
+
+        return "\n\n---\n\n".join(outputs)
+    except Exception as ex:
+        return f"Error fetching all Nexus Account Snapshots: {ex}"
+
+
 def get_schema_context(path: Path = None) -> str:
     """Load nexus_data schema from JSON for the agent instruction (full schema for SQL)."""
     path = path or SCHEMA_FILE
@@ -128,34 +387,24 @@ GENERAL RULES:
 - Never run INSERT, UPDATE, DELETE, or DDL statements.
 
 INTENT: ACCOUNT vs SNAPSHOT
-- **Single-account intent**: User asks about one specific account by name (e.g. "status of ABC Capital", "commercial data for Antino Bank1", "tell me about Antino Bank"). → Query that account only and return one commercial line.
-- **Snapshot intent**: User asks for a snapshot, all accounts, overview, or commercial summary of everyone (e.g. "give me the snapshot", "commercial snapshot", "all accounts", "account overview", "show me commercial info for all accounts"). → Query ALL accounts from both tables and return one commercial line per account.
+- **Single-account intent**: User asks about one specific account by name. → Use get_nexus_account_snapshot for full format (Commercial + MEAU + ORBIT + Churn).
+- **All-accounts snapshot intent**: User asks for "snapshot of all accounts", "all accounts snapshot", "give me all accounts", "account overview for everyone". → Use **get_all_nexus_account_snapshots** (NOT execute_sql). This returns the full Nexus format for each account, with data from account_info and test_pod mapped via POD_Internal_Id__c = pod_id.
 
-COMMERCIAL LINE FORMAT (use for both single-account and snapshot):
-  Commercial: $<Total_ARR> ARR | Renewal: <Renewal_Date> | Owner: <Account_Owner>
-  - Use numeric ARR, renewal date (or "N/A" if null), and owner name.
+SINGLE-ACCOUNT (one account by name):
+- Use **get_nexus_account_snapshot(account_name="...")** — it queries account_info and test_pod (via POD_Internal_Id__c → pod_id) and returns the full format.
+- Do NOT use execute_sql for single-account snapshot.
 
-SINGLE-ACCOUNT (status / one account by name):
-- Tables: `sf_account_info` and `dummy_account_info` (both have Customer_Name, Total_ARR, Renewal_Date, Account_Owner). Try the table that likely has the account; if not found, try the other.
-- Query example:
-  SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner
-  FROM `{config.PROJECT_ID}.nexus_data.sf_account_info`
-  WHERE Customer_Name = '<ACCOUNT_NAME>';
-  (or same FROM dummy_account_info)
-- Reply with ONE line in the commercial format above. If not found in either table, say: "No account record was found for <ACCOUNT_NAME> in sf_account_info or dummy_account_info."
+ALL ACCOUNTS SNAPSHOT:
+- Use **get_all_nexus_account_snapshots()** — it fetches all accounts from account_info, maps each to test_pod via POD_Internal_Id__c = pod_id, and returns the full Nexus Account Snapshot format (Commercial, MEAU, ORBIT score, Churn Risk) for each account.
+- Do NOT use execute_sql for "snapshot of all accounts" or "all accounts" — get_all_nexus_account_snapshots provides the correct data with proper pod mapping.
 
-SNAPSHOT (all accounts):
-- Get commercial data for EVERY account from BOTH tables. Run two queries (no WHERE on Customer_Name):
-  1) SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner FROM `{config.PROJECT_ID}.nexus_data.sf_account_info`;
-  2) SELECT Customer_Name, Total_ARR, Renewal_Date, Account_Owner FROM `{config.PROJECT_ID}.nexus_data.dummy_account_info`;
-- For the answer: list each account on its own line. Each line must show the account name and then the commercial line, e.g.:
-  **<Customer_Name>**: Commercial: $<Total_ARR> ARR | Renewal: <Renewal_Date> | Owner: <Account_Owner>
-- Order: list sf_account_info results first, then dummy_account_info results (or combine and sort by name if you prefer). Do not add extra commentary unless the user asks.
+EXECUTE_SQL (other queries only):
+- Use execute_sql only for ad-hoc questions that are NOT account snapshot requests (e.g. pipeline totals, opportunity counts, custom queries).
 """
 
     return LlmAgent(
         model=model,
         name="salesforce_agent",
         instruction=instruction,
-        tools=[FunctionTool(execute_sql)],
+        tools=[FunctionTool(execute_sql), FunctionTool(get_nexus_account_snapshot), FunctionTool(get_all_nexus_account_snapshots)],
     )
