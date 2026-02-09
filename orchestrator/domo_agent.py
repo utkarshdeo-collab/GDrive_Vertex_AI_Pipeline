@@ -86,6 +86,61 @@ def execute_sql(project_id: str, query: str) -> dict:
         return {"status": "ERROR", "error_details": str(ex)}
 
 
+def get_pod_data_by_id(pod_id: int) -> dict:
+    """Fetch pod data from test_pod table using pod_id. Returns MEAU, ORBIT score, Churn Risk, and Expansion Signal data.
+    Use this when you have a pod_id from Salesforce data and need to get the corresponding Domo metrics."""
+    from .usage_collector import record_bigquery
+    import google.auth
+    try:
+        creds = _bq_credentials
+        if creds is None:
+            creds, _ = google.auth.default()
+        client = bigquery.Client(project=config.PROJECT_ID, credentials=creds)
+
+        q_pod = f"""
+        SELECT pretty_name, meau, provisioned_users, active_users, health_score,
+               risk_ratio_for_next_renewal, contracted_licenses
+        FROM `{config.PROJECT_ID}.domo_test_dataset.test_pod`
+        WHERE pod_id = {pod_id}
+        ORDER BY `month` DESC
+        LIMIT 1
+        """
+        try:
+            job = client.query(q_pod, project=config.PROJECT_ID)
+            pod_rows = list(job.result(max_results=1))
+            record_bigquery(job.total_bytes_processed or 0)
+            
+            if pod_rows:
+                pod = pod_rows[0]
+                return {
+                    "status": "SUCCESS",
+                    "pretty_name": pod.get("pretty_name"),
+                    "meau": pod.get("meau"),
+                    "provisioned_users": pod.get("provisioned_users"),
+                    "active_users": pod.get("active_users"),
+                    "health_score": pod.get("health_score"),
+                    "risk_ratio_for_next_renewal": pod.get("risk_ratio_for_next_renewal"),
+                    "contracted_licenses": pod.get("contracted_licenses")
+                }
+            else:
+                return {
+                    "status": "NOT_FOUND",
+                    "pod_id": pod_id
+                }
+        except Exception as e:
+            return {
+                "status": "ERROR",
+                "error": str(e),
+                "pod_id": pod_id
+            }
+    except Exception as ex:
+        return {
+            "status": "ERROR",
+            "error": str(ex),
+            "pod_id": pod_id
+        }
+
+
 def get_schema_context(path: Path = None) -> str:
     """Load domo_test_dataset schema from JSON for the agent instruction (full schema for SQL)."""
     path = path or SCHEMA_FILE
@@ -130,5 +185,5 @@ USAGE METRICS (test_pod): For questions about "average daily message sent", "avg
         model=model,
         name="domo_agent",
         instruction=instruction,
-        tools=[FunctionTool(execute_sql)],
+        tools=[FunctionTool(execute_sql), FunctionTool(get_pod_data_by_id)],
     )

@@ -27,11 +27,12 @@ from google.adk.utils.context_utils import Aclosing
 from google.genai import types
 
 from orchestrator.pdf_agent import create_pdf_agent
-from orchestrator.salesforce_agent import create_salesforce_agent
-from orchestrator.domo_agent import create_domo_agent
+from orchestrator.salesforce_agent import create_salesforce_agent, get_salesforce_account_data
+from orchestrator.domo_agent import create_domo_agent, get_pod_data_by_id
 from orchestrator.usage_collector import clear as usage_clear
 from orchestrator.usage_collector import get_and_clear as usage_get_and_clear
 from orchestrator.usage_collector import record_gemini as usage_record_gemini
+from google.adk.tools.function_tool import FunctionTool
 
 # Schema files for routing summary (nexus_schema.json and domo_schema.json in orchestrator folder)
 SALESFORCE_SCHEMA_FILE = Path(__file__).resolve().parent / "nexus_schema.json"
@@ -204,6 +205,128 @@ def get_routing_data_dictionary(salesforce_path: Path, domo_path: Path) -> str:
     return "\n".join(lines)
 
 
+def get_nexus_account_snapshot_orchestrated(account_name: str) -> str:
+    """Orchestrate fetching Nexus Account Snapshot by combining Salesforce and Domo data.
+    This function:
+    1. Calls salesforce_agent.get_salesforce_account_data() to get Salesforce data + pod_id
+    2. Calls domo_agent.get_pod_data_by_id(pod_id) to get pod metrics
+    3. Merges and formats the combined data
+    
+    Use this when user asks for account snapshot/overview for a specific account."""
+    from orchestrator.salesforce_agent import _engagement_from_task_count
+    
+    try:
+        # Step 1: Get Salesforce data (including pod_id)
+        salesforce_data = get_salesforce_account_data(account_name)
+        
+        if salesforce_data.get("status") != "SUCCESS":
+            return f"Error fetching Salesforce data: {salesforce_data.get('error', 'Account not found')}"
+        
+        # Step 2: Get pod_id and call domo_agent's function
+        pod_id = salesforce_data.get("pod_id")
+        pod_data = {}
+        
+        if pod_id is not None:
+            pod_id_str = str(pod_id).strip()
+            if pod_id_str and pod_id_str.upper() not in ("NULL", "NONE", ""):
+                try:
+                    pod_id_int = int(float(pod_id_str))
+                    pod_data_result = get_pod_data_by_id(pod_id_int)
+                    
+                    if pod_data_result.get("status") == "SUCCESS":
+                        pod_data = pod_data_result
+                except (ValueError, TypeError):
+                    # If conversion fails, pod_data remains empty
+                    pass
+        
+        # Step 3: Format and merge the data
+        client_name = salesforce_data.get("customer_name", account_name)
+        parts = []
+
+        # Commercial (from Salesforce)
+        arr = salesforce_data.get("total_arr")
+        renewal = salesforce_data.get("renewal_date") or "N/A"
+        owner = salesforce_data.get("account_owner") or "N/A"
+        arr_str = f"${int(arr):,}" if arr is not None and arr != "" else "N/A"
+        parts.append(f"• Commercial: {arr_str} ARR | Renewal: {renewal} | Owner: {owner}")
+
+        # Adoption — N/A for now
+        parts.append("• Adoption: N/A")
+
+        # MEAU — from Domo pod data
+        meau_val = pod_data.get("meau")
+        if meau_val is not None:
+            parts.append(f"• MEAU: {meau_val}")
+        else:
+            parts.append("• MEAU: N/A")
+
+        # Support placeholder
+        parts.append("• Support: N/A (no Jira linkage in data)")
+
+        # Engagement from Task_Count (from Salesforce)
+        task_count = salesforce_data.get("task_count")
+        parts.append(f"• {_engagement_from_task_count(task_count)}")
+
+        # Summary & Insights — ORBIT score = health_score from test_pod (Domo)
+        orbit = pod_data.get("health_score")
+        risk = pod_data.get("risk_ratio_for_next_renewal")
+        
+        # Expansion Signal: provisioned_users > 90% of contracted_licenses from test_pod
+        expansion_signal = "N/A"
+        provisioned_users = pod_data.get("provisioned_users")
+        contracted_licenses = pod_data.get("contracted_licenses")
+        # Check if both values exist and are valid numbers
+        if provisioned_users is not None and contracted_licenses is not None:
+            try:
+                provisioned_users_val = float(provisioned_users)
+                contracted_licenses_val = float(contracted_licenses)
+                # Only calculate if contracted_licenses > 0 (avoid division by zero)
+                if contracted_licenses_val > 0:
+                    if provisioned_users_val > (0.9 * contracted_licenses_val):
+                        expansion_signal = "Positive"
+                    else:
+                        expansion_signal = "Negative"
+                elif contracted_licenses_val == 0 and provisioned_users_val > 0:
+                    # If contracted is 0 but provisioned > 0, it's positive
+                    expansion_signal = "Positive"
+                elif contracted_licenses_val == 0:
+                    # If both are 0, it's negative
+                    expansion_signal = "Negative"
+            except (ValueError, TypeError, AttributeError):
+                # If conversion fails, keep as N/A
+                pass
+        
+        insights = []
+        # ORBIT score = health_score from test_pod
+        if orbit is not None:
+            insights.append(f"○ ORBIT score: {orbit}")
+        else:
+            insights.append("○ ORBIT score: N/A")
+        # Churn Risk = risk_ratio_for_next_renewal from test_pod
+        if risk is not None:
+            # Format as percentage if it's a decimal (0-1), otherwise show as-is
+            if isinstance(risk, (int, float)):
+                if 0 <= risk <= 1:
+                    risk_pct = risk * 100
+                    insights.append(f"○ Churn Risk: {risk_pct:.1f}% (risk_ratio_for_next_renewal)")
+                else:
+                    insights.append(f"○ Churn Risk: {risk} (risk_ratio_for_next_renewal)")
+            else:
+                insights.append(f"○ Churn Risk: {risk} (risk_ratio_for_next_renewal)")
+        else:
+            insights.append("○ Churn Risk: N/A")
+        insights.append("○ Support Escalation: N/A")
+        # Expansion Signal: provisioned_users > 90% of contracted_licenses from test_pod
+        insights.append(f"○ Expansion Signal: {expansion_signal}")
+        insights.append("○ Suggested Action: N/A")
+        parts.append("• Summary & Insights:")
+        parts.append("\n  ".join(insights))
+
+        return f"Nexus Account Snapshot: {client_name}\n\n" + "\n".join(parts)
+    except Exception as ex:
+        return f"Error fetching Nexus Account Snapshot: {ex}"
+
+
 def build_agents(credentials, routing_data_dict: str):
     """Build PDF agent, Salesforce agent, Domo agent, and master orchestrator from sub-agent modules."""
     model = Gemini(
@@ -218,8 +341,8 @@ def build_agents(credentials, routing_data_dict: str):
     salesforce_agent = create_salesforce_agent(credentials)
     domo_agent = create_domo_agent(credentials)
 
-    # Master agent: route using data dictionary; no combined questions
-    master_instruction = f"""You are the master assistant. Route each user question to exactly ONE specialist.
+    # Master agent: route using data dictionary; orchestrates Salesforce + Domo for account snapshots
+    master_instruction = f"""You are the master assistant. Route each user question to the appropriate specialist(s).
 
 {routing_data_dict}
 
@@ -229,16 +352,27 @@ ROUTING RULES:
 - If the user message starts with "[ROUTING: ... pdf_agent only.]": you MUST delegate to pdf_agent (do not use salesforce_agent or domo_agent).
 - If the question is about the UPLOADED DOCUMENT or PDF (reports, case studies, implementation cost, change management, budget, lessons learned, post-implementation, executive summary, tables in the document): delegate to pdf_agent.
 - If the user asks for a summary or content of a NAMED document (e.g. SYM_1PGR_Insurance, SYM_1PGR_Federation, InsurTech, ARK Capital Case Study, Symphony for Wealth/Insurance, or any report/document title): delegate to pdf_agent. These are indexed PDF documents, not Domo or Salesforce data.
-- If the question is about SALESFORCE or BIGQUERY data (ARR, pipeline, opportunities, customers, licenses, Total_ARR, Customer_Name, Opportunity_Name, Stage, CloseDate, nexus_data, or any Salesforce tables/columns above): delegate to salesforce_agent.
-- If the question is about DOMO or BIGQUERY data (domo_test_dataset, domo_test, test_pod, or any Domo tables/columns above): delegate to domo_agent. This includes: "how many total accounts owned by [person]", aggregate counts (num_Total_accounts), usage metrics (average daily message sent, avg_daily_msg_sent, active users, provisioned users, messages sent) for an account like Symphony1, health scores. For "who is the account owner for [specific account name]" (e.g. ABC Capital) or single-account lookup by customer name, use salesforce_agent, not domo_agent.
+
+ACCOUNT SNAPSHOT REQUESTS (orchestrates Salesforce + Domo):
+- If the user asks for an account snapshot, overview, or detailed information about a SPECIFIC ACCOUNT BY NAME (e.g. "account for ABC Capital", "snapshot for Antino Bank", "tell me about Global Financial"): use **get_nexus_account_snapshot_orchestrated(account_name="...")** tool.
+- This tool orchestrates: (1) Gets Salesforce data + pod_id from salesforce_agent, (2) Gets pod metrics from domo_agent using pod_id, (3) Merges and formats the combined data.
+- Do NOT delegate to salesforce_agent or domo_agent separately for account snapshot requests - use the orchestration tool.
+
+OTHER SALESFORCE QUESTIONS:
+- If the question is about SALESFORCE or BIGQUERY data (ARR, pipeline, opportunities, customers, licenses, Total_ARR, Customer_Name, Opportunity_Name, Stage, CloseDate, nexus_data, or any Salesforce tables/columns above) BUT NOT an account snapshot: delegate to salesforce_agent.
+
+OTHER DOMO QUESTIONS:
+- If the question is about DOMO or BIGQUERY data (domo_test_dataset, domo_test, test_pod, or any Domo tables/columns above) BUT NOT an account snapshot: delegate to domo_agent. This includes: "how many total accounts owned by [person]", aggregate counts (num_Total_accounts), usage metrics (average daily message sent, avg_daily_msg_sent, active users, provisioned users, messages sent) for an account like Symphony1, health scores.
+
 - If the question clearly needs MULTIPLE data sources (document + Salesforce + Domo) in one question: do NOT call multiple agents. Reply with exactly: "Please ask about the document, Salesforce data, or Domo data separately."
 
-Always delegate to exactly one sub-agent (pdf_agent, salesforce_agent, or domo_agent). After you get the answer, present it clearly to the user. Do not mention "Salesforce data" when the user asked about the document or Domo."""
+After you get the answer, present it clearly to the user."""
 
     master_agent = LlmAgent(
         model=model,
         name="orchestrator",
         instruction=master_instruction,
+        tools=[FunctionTool(get_nexus_account_snapshot_orchestrated)],
         sub_agents=[pdf_agent, salesforce_agent, domo_agent],
     )
 
