@@ -54,16 +54,16 @@ def execute_sql(project_id: str, query: str) -> dict:
     Use fully qualified names: `project_id.nexus_data.TABLE_NAME`.
     """
     from .usage_collector import record_bigquery
+    from .audit_context import append_audit_entry
     import google.auth
     try:
         if project_id != config.PROJECT_ID:
-            return {
-                "status": "ERROR",
-                "error_details": (
-                    f"Tool is restricted to project {config.PROJECT_ID}. "
-                    f"Use project_id={config.PROJECT_ID}."
-                ),
-            }
+            err = (
+                f"Tool is restricted to project {config.PROJECT_ID}. "
+                f"Use project_id={config.PROJECT_ID}."
+            )
+            append_audit_entry("execute_sql", query, None, err)
+            return {"status": "ERROR", "error_details": err}
         creds = _bq_credentials
         if creds is None:
             creds, _ = google.auth.default()
@@ -76,10 +76,9 @@ def execute_sql(project_id: str, query: str) -> dict:
             job_config=bigquery.QueryJobConfig(dry_run=True),
         )
         if dry_run_job.statement_type != "SELECT":
-            return {
-                "status": "ERROR",
-                "error_details": "Read-only mode only supports SELECT statements.",
-            }
+            err = "Read-only mode only supports SELECT statements."
+            append_audit_entry("execute_sql", query, None, err)
+            return {"status": "ERROR", "error_details": err}
         job = client.query(
             query,
             project=project_id,
@@ -97,11 +96,13 @@ def execute_sql(project_id: str, query: str) -> dict:
             rows.append(row_values)
         bytes_processed = job.total_bytes_processed or 0
         record_bigquery(bytes_processed)
+        append_audit_entry("execute_sql", query, bytes_processed, None)
         result = {"status": "SUCCESS", "rows": rows}
         if len(rows) == _MAX_QUERY_ROWS:
             result["result_is_likely_truncated"] = True
         return result
     except Exception as ex:
+        append_audit_entry("execute_sql", query, None, str(ex))
         return {"status": "ERROR", "error_details": str(ex)}
 
 
@@ -109,6 +110,7 @@ def get_salesforce_account_data(account_name: str) -> dict:
     """Fetch Salesforce account data from test_dataset2 and return pod_id for Domo lookup.
     Returns a dict with Salesforce data and pod_id. Use this when you need to get pod_id to query Domo agent."""
     from .usage_collector import record_bigquery
+    from .audit_context import append_audit_entry
     import google.auth
     try:
         creds = _bq_credentials
@@ -129,10 +131,13 @@ def get_salesforce_account_data(account_name: str) -> dict:
         try:
             job = client.query(q_account, project=config.PROJECT_ID)
             commercial_rows = list(job.result(max_results=1))
-            record_bigquery(job.total_bytes_processed or 0)
+            bytes_processed = job.total_bytes_processed or 0
+            record_bigquery(bytes_processed)
+            append_audit_entry("get_salesforce_account_data", q_account, bytes_processed, None)
             if commercial_rows:
                 pod_internal_id = commercial_rows[0].get("POD_Internal_Id__c")
-        except Exception:
+        except Exception as e:
+            append_audit_entry("get_salesforce_account_data", q_account, None, str(e))
             pass
 
         # Return structured data
@@ -154,6 +159,7 @@ def get_salesforce_account_data(account_name: str) -> dict:
                 "pod_id": None
             }
     except Exception as ex:
+        append_audit_entry("get_salesforce_account_data", None, None, str(ex))
         return {
             "status": "ERROR",
             "error": str(ex),
@@ -171,6 +177,8 @@ def get_nexus_account_snapshot(account_name: str) -> str:
     Returns formatted snapshot in the Nexus Account Snapshot format. 
     Use when user asks for account snapshot/overview for a specific account 
     (e.g. 'account for ABC Capital', 'snapshot for Antino Bank')."""
+    from .audit_context import append_audit_entry
+    append_audit_entry("get_nexus_account_snapshot", None, None, None)
     try:
         # Step 1: Get Salesforce data (including pod_id)
         salesforce_data = get_salesforce_account_data(account_name)
@@ -355,6 +363,7 @@ def get_all_nexus_account_snapshots() -> str:
     for each account. Use when user asks for 'snapshot of all accounts', 'all accounts snapshot',
     'give me all accounts', etc."""
     from .usage_collector import record_bigquery
+    from .audit_context import append_audit_entry
     import google.auth
     try:
         creds = _bq_credentials
@@ -373,7 +382,9 @@ def get_all_nexus_account_snapshots() -> str:
             job = client.query(q_account, project=config.PROJECT_ID)
             account_rows = list(job.result(max_results=500))
             record_bigquery(job.total_bytes_processed or 0)
+            append_audit_entry("get_all_nexus_account_snapshots", q_account, job.total_bytes_processed or 0, None)
         except Exception as ex:
+            append_audit_entry("get_all_nexus_account_snapshots", q_account, None, str(ex))
             return f"Error fetching accounts: {ex}"
 
         if not account_rows:
@@ -406,7 +417,9 @@ def get_all_nexus_account_snapshots() -> str:
                 for row in job.result(max_results=500):
                     pod_id_to_row[row["pod_id"]] = dict(row)
                 record_bigquery(job.total_bytes_processed or 0)
-            except Exception:
+                append_audit_entry("get_all_nexus_account_snapshots", q_pod, job.total_bytes_processed or 0, None)
+            except Exception as e:
+                append_audit_entry("get_all_nexus_account_snapshots", q_pod, None, str(e))
                 pass
 
         # 3) Format each account

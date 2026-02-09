@@ -93,3 +93,11 @@ GEMINI_INPUT_PER_1M_TOKENS = float(os.environ.get("GEMINI_INPUT_PER_1M_TOKENS", 
 GEMINI_OUTPUT_PER_1M_TOKENS = float(os.environ.get("GEMINI_OUTPUT_PER_1M_TOKENS", "0.30"))  # Gemini 2.0 Flash output $/1M tokens
 EMBEDDING_PER_1K_CHARS = float(os.environ.get("EMBEDDING_PER_1K_CHARS", "0.000025"))        # text-embedding-004 $/1K characters
 BIGQUERY_PER_TB = float(os.environ.get("BIGQUERY_PER_TB", "5.0"))                           # BigQuery on-demand $/TB processed
+
+# ================= ORCHESTRATOR AUDIT (BigQuery log table) =================
+# Audit log: one row per tool invocation (question, response, tool_call, sql_generated, etc.).
+AUDIT_ENABLED = os.environ.get("AUDIT_ENABLED", "true").lower() in ("true", "1", "yes")
+AUDIT_DATASET = os.environ.get("AUDIT_DATASET", "orchestrator_logs")
+AUDIT_TABLE = os.environ.get("AUDIT_TABLE", "orchestrator_audit")
+# Region for audit dataset (create if not exists). Use same as LOCATION.
+AUDIT_REGION = os.environ.get("AUDIT_REGION", LOCATION)

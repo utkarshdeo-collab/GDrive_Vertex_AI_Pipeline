@@ -6,6 +6,8 @@ Combined questions (PDF + Salesforce + Domo in one) are answered with: ask separ
 import asyncio
 import json
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure project root is on path
@@ -32,6 +34,8 @@ from orchestrator.domo_agent import create_domo_agent, get_pod_data_by_id
 from orchestrator.usage_collector import clear as usage_clear
 from orchestrator.usage_collector import get_and_clear as usage_get_and_clear
 from orchestrator.usage_collector import record_gemini as usage_record_gemini
+from orchestrator.audit_context import set_turn_context, get_and_clear_turn_context, append_audit_entry
+from orchestrator.audit_logger import ensure_audit_dataset_and_table, write_audit_rows, build_audit_rows
 from google.adk.tools.function_tool import FunctionTool
 
 # Schema files for routing summary (nexus_schema.json and domo_schema.json in orchestrator folder)
@@ -214,7 +218,9 @@ def get_nexus_account_snapshot_orchestrated(account_name: str) -> str:
     
     Use this when user asks for account snapshot/overview for a specific account."""
     from orchestrator.salesforce_agent import _engagement_from_task_count
-    
+
+    append_audit_entry("get_nexus_account_snapshot_orchestrated", None, None, None)
+
     try:
         # Step 1: Get Salesforce data (including pod_id)
         salesforce_data = get_salesforce_account_data(account_name)
@@ -406,6 +412,19 @@ async def main():
         print(f"  Authentication failed: {e}")
         sys.exit(1)
 
+    session_id = str(uuid.uuid4())
+    if config.AUDIT_ENABLED:
+        try:
+            ensure_audit_dataset_and_table(
+                config.PROJECT_ID,
+                config.AUDIT_DATASET,
+                config.AUDIT_TABLE,
+                config.AUDIT_REGION,
+                credentials,
+            )
+        except Exception as e:
+            print(f"  [Audit] Could not ensure dataset/table: {e}", flush=True)
+
     routing_data_dict = get_routing_data_dictionary(SALESFORCE_SCHEMA_FILE, DOMO_SCHEMA_FILE)
     root_agent = build_agents(credentials, routing_data_dict)
 
@@ -435,10 +454,24 @@ async def main():
 
             # Pre-route hint: if question is clearly Salesforce/BigQuery, hint so master routes to salesforce_agent
             message_to_send = _maybe_add_routing_hint(user_input)
+            if message_to_send.startswith("[ROUTING:") and "pdf_agent" in message_to_send:
+                routing_hint = "document"
+            elif message_to_send.startswith("[ROUTING:") and "domo_agent" in message_to_send:
+                routing_hint = "domo"
+            elif message_to_send.startswith("[ROUTING:") and "salesforce_agent" in message_to_send:
+                routing_hint = "salesforce"
+            else:
+                routing_hint = "none"
+
+            turn_id = str(uuid.uuid4())
+            turn_start_utc = datetime.now(timezone.utc)
+            set_turn_context(session_id, turn_id, user_input, routing_hint, turn_start_utc)
+
             msg = types.Content(role="user", parts=[types.Part(text=message_to_send)])
             print("Assistant: ", end="", flush=True)
 
             usage_clear()
+            response_parts = []
             async with Aclosing(
                 runner.run_async(
                     user_id="user",
@@ -457,9 +490,27 @@ async def main():
                     if event.content and event.content.parts:
                         for part in event.content.parts:
                             if part.text:
+                                response_parts.append(part.text)
                                 print(part.text, end="", flush=True)
                             if getattr(part, "function_call", None):
                                 print(f"\n  [Calling {getattr(part.function_call, 'name', 'tool')}...]", flush=True)
+            assistant_response = "".join(response_parts)
+
+            if config.AUDIT_ENABLED:
+                ctx = get_and_clear_turn_context()
+                if ctx is not None:
+                    entries = ctx.get("audit_entries") or []
+                    rows = build_audit_rows(
+                        ctx.get("turn_start_utc") or turn_start_utc,
+                        ctx.get("user_question", user_input),
+                        assistant_response,
+                        ctx.get("turn_id", turn_id),
+                        ctx.get("session_id"),
+                        ctx.get("routing_hints"),
+                        entries,
+                    )
+                    write_audit_rows(rows, config.PROJECT_ID, config.AUDIT_DATASET, config.AUDIT_TABLE, credentials)
+
             tasks = usage_get_and_clear()
             _print_cost_breakdown(tasks)
             print("")

@@ -95,11 +95,15 @@ def search_document(query: str, top_k: int = DEFAULT_TOP_K) -> dict:
     "context" and "num_passages".
     """
     from .usage_collector import record_embedding
+    from .audit_context import append_audit_entry
     record_embedding(len(query))
     print(f"\n>>> SEARCH_DOCUMENT CALLED: query={query[:80]!r}...", flush=True)
     try:
-        return _search_document_impl(query, top_k)
+        result = _search_document_impl(query, top_k)
+        append_audit_entry("search_document", None, None, result.get("error"))
+        return result
     except Exception as e:
+        append_audit_entry("search_document", None, None, str(e))
         import traceback
         print(f"\n>>> SEARCH_DOCUMENT EXCEPTION: {e}", flush=True)
         traceback.print_exc()

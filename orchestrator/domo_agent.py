@@ -35,16 +35,16 @@ def execute_sql(project_id: str, query: str) -> dict:
     Use fully qualified names: `project_id.domo_test_dataset.TABLE_NAME`.
     """
     from .usage_collector import record_bigquery
+    from .audit_context import append_audit_entry
     import google.auth
     try:
         if project_id != config.PROJECT_ID:
-            return {
-                "status": "ERROR",
-                "error_details": (
-                    f"Tool is restricted to project {config.PROJECT_ID}. "
-                    f"Use project_id={config.PROJECT_ID}."
-                ),
-            }
+            err = (
+                f"Tool is restricted to project {config.PROJECT_ID}. "
+                f"Use project_id={config.PROJECT_ID}."
+            )
+            append_audit_entry("execute_sql", query, None, err)
+            return {"status": "ERROR", "error_details": err}
         creds = _bq_credentials
         if creds is None:
             creds, _ = google.auth.default()
@@ -57,10 +57,9 @@ def execute_sql(project_id: str, query: str) -> dict:
             job_config=bigquery.QueryJobConfig(dry_run=True),
         )
         if dry_run_job.statement_type != "SELECT":
-            return {
-                "status": "ERROR",
-                "error_details": "Read-only mode only supports SELECT statements.",
-            }
+            err = "Read-only mode only supports SELECT statements."
+            append_audit_entry("execute_sql", query, None, err)
+            return {"status": "ERROR", "error_details": err}
         job = client.query(
             query,
             project=project_id,
@@ -78,11 +77,13 @@ def execute_sql(project_id: str, query: str) -> dict:
             rows.append(row_values)
         bytes_processed = job.total_bytes_processed or 0
         record_bigquery(bytes_processed)
+        append_audit_entry("execute_sql", query, bytes_processed, None)
         result = {"status": "SUCCESS", "rows": rows}
         if len(rows) == _MAX_QUERY_ROWS:
             result["result_is_likely_truncated"] = True
         return result
     except Exception as ex:
+        append_audit_entry("execute_sql", query, None, str(ex))
         return {"status": "ERROR", "error_details": str(ex)}
 
 
@@ -90,6 +91,7 @@ def get_pod_data_by_id(pod_id: int) -> dict:
     """Fetch pod data from test_pod table using pod_id. Returns MEAU, ORBIT score, Churn Risk, and Expansion Signal data.
     Use this when you have a pod_id from Salesforce data and need to get the corresponding Domo metrics."""
     from .usage_collector import record_bigquery
+    from .audit_context import append_audit_entry
     import google.auth
     try:
         creds = _bq_credentials
@@ -109,7 +111,8 @@ def get_pod_data_by_id(pod_id: int) -> dict:
             job = client.query(q_pod, project=config.PROJECT_ID)
             pod_rows = list(job.result(max_results=1))
             record_bigquery(job.total_bytes_processed or 0)
-            
+            append_audit_entry("get_pod_data_by_id", q_pod, job.total_bytes_processed or 0, None)
+
             if pod_rows:
                 pod = pod_rows[0]
                 return {
@@ -128,12 +131,14 @@ def get_pod_data_by_id(pod_id: int) -> dict:
                     "pod_id": pod_id
                 }
         except Exception as e:
+            append_audit_entry("get_pod_data_by_id", q_pod, None, str(e))
             return {
                 "status": "ERROR",
                 "error": str(e),
                 "pod_id": pod_id
             }
     except Exception as ex:
+        append_audit_entry("get_pod_data_by_id", None, None, str(ex))
         return {
             "status": "ERROR",
             "error": str(ex),
