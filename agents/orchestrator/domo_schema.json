@@ -1,0 +1,49 @@
+{
+  "project_id": "sym-dev-mr-agents-01",
+  "datasets": [
+    {
+      "dataset_id": "domo_test_dataset",
+      "tables": [
+        {
+          "table_id": "domo_test",
+          "row_count": null,
+          "schema": [
+            {"column_name": "Month", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "Account_Owner", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "num_Total_accounts", "data_type": "INTEGER", "mode": "NULLABLE", "description": null},
+            {"column_name": "minus_4_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "minus_3_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "minus_2_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "minus_1_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "0_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "plus_1_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "plus_2_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "plus_3_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "plus_4_Health_Score", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "UID", "data_type": "FLOAT", "mode": "NULLABLE", "description": null}
+          ]
+        },
+        {
+          "table_id": "test_pod",
+          "row_count": null,
+          "schema": [
+            {"column_name": "pod_id", "data_type": "INTEGER", "mode": "NULLABLE", "description": null},
+            {"column_name": "pretty_name", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "active_users", "data_type": "INTEGER", "mode": "NULLABLE", "description": null},
+            {"column_name": "meau", "data_type": "INTEGER", "mode": "NULLABLE", "description": null},
+            {"column_name": "avg_daily_msg_sent", "data_type": "FLOAT", "mode": "NULLABLE", "description": null},
+            {"column_name": "provisioned_users", "data_type": "FLOAT", "mode": "NULLABLE", "description": null},
+            {"column_name": "latest_health_score", "data_type": "FLOAT", "mode": "NULLABLE", "description": null},
+            {"column_name": "health_score", "data_type": "INTEGER", "mode": "NULLABLE", "description": null},
+            {"column_name": "risk_ratio_for_next_renewal", "data_type": "FLOAT", "mode": "NULLABLE", "description": null},
+            {"column_name": "month", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "total_arr", "data_type": "FLOAT", "mode": "NULLABLE", "description": null},
+            {"column_name": "account_owner", "data_type": "STRING", "mode": "NULLABLE", "description": null},
+            {"column_name": "contracted_licenses", "data_type": "FLOAT", "mode": "NULLABLE", "description": null},
+            {"column_name": "next_renewal_date", "data_type": "STRING", "mode": "NULLABLE", "description": null}
+          ]
+        }
+      ]
+    }
+  ]
+}
