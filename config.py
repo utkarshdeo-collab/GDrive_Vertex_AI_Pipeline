@@ -75,8 +75,8 @@ EMBEDDING_MODEL = "text-embedding-004"
 EMBEDDINGS_GCS_PREFIX = "embeddings"
 
 # ================= PHASE 4: DEPLOY & ADK =================
-# Vector Search index (from Phase 3 output). Latest: 1,744 chunks → index 8645508307714310144.
-VECTOR_INDEX_ID = os.environ.get("VECTOR_INDEX_ID", "8645508307714310144")
+# Vector Search index (from Phase 3 output). Latest: 5,698 embeddings → index 4356814825062400000.
+VECTOR_INDEX_ID = os.environ.get("VECTOR_INDEX_ID", "4356814825062400000")
 # Endpoint where the index is deployed (must match display name in Vector Search → Index endpoints).
 INDEX_ENDPOINT_DISPLAY_NAME = os.environ.get("INDEX_ENDPOINT_DISPLAY_NAME", "doc-pipeline-endpoint")
 # Deployed index ID on that endpoint (must match the deployment that has our 1,744-chunk index).

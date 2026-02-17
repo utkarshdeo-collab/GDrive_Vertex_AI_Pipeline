@@ -107,8 +107,59 @@ def execute_sql(project_id: str, query: str) -> dict:
 
 
 def get_salesforce_account_data(account_name: str) -> dict:
-    """Fetch Salesforce account data from test_dataset2 and return pod_id for Domo lookup.
-    Returns a dict with Salesforce data and pod_id. Use this when you need to get pod_id to query Domo agent."""
+    """Fetch Salesforce account data using vector search and return pod_id for Domo lookup.
+    
+    Flow:
+    1. Build text: "Account {account_name}"
+    2. Embed → vector, query endpoint with filter=SF
+    3. Resolve first result ID via chunks lookup (no BigQuery)
+    4. Return SF data including pod_id
+    
+    Falls back to BigQuery only if vector search or lookup fails."""
+    from .vector_endpoint import query_vector_index, load_chunks_lookup
+    from .audit_context import append_audit_entry
+    
+    try:
+        query_text = f"Account {account_name}"
+        vector_results = query_vector_index(query_text, filter_type="SF", top_k=5)
+        
+        if vector_results.get("status") != "SUCCESS":
+            return _get_salesforce_account_data_bigquery(account_name)
+        
+        results = vector_results.get("results", [])
+        if not results:
+            return _get_salesforce_account_data_bigquery(account_name)
+        
+        first_id = results[0].get("id")
+        if not first_id:
+            return _get_salesforce_account_data_bigquery(account_name)
+        
+        lookup = load_chunks_lookup()
+        if not lookup or first_id not in lookup:
+            return _get_salesforce_account_data_bigquery(account_name)
+        
+        entry = lookup[first_id]
+        if entry.get("source") != "SF":
+            return _get_salesforce_account_data_bigquery(account_name)
+        
+        r = entry.get("data") or {}
+        return {
+            "status": "SUCCESS",
+            "customer_name": str(r.get("Customer_Name") or account_name),
+            "total_arr": r.get("Total_ARR"),
+            "renewal_date": r.get("Renewal_Date"),
+            "account_owner": r.get("Account_Owner"),
+            "task_count": r.get("Task_Count"),
+            "pod_id": r.get("POD_Internal_Id__c"),
+        }
+        
+    except Exception as ex:
+        append_audit_entry("get_salesforce_account_data", account_name, None, str(ex))
+        return _get_salesforce_account_data_bigquery(account_name)
+
+
+def _get_salesforce_account_data_bigquery(account_name: str) -> dict:
+    """Fallback: Fetch Salesforce account data from BigQuery (original implementation)."""
     from .usage_collector import record_bigquery
     from .audit_context import append_audit_entry
     import google.auth
@@ -133,11 +184,11 @@ def get_salesforce_account_data(account_name: str) -> dict:
             commercial_rows = list(job.result(max_results=1))
             bytes_processed = job.total_bytes_processed or 0
             record_bigquery(bytes_processed)
-            append_audit_entry("get_salesforce_account_data", q_account, bytes_processed, None)
+            append_audit_entry("get_salesforce_account_data_bigquery", q_account, bytes_processed, None)
             if commercial_rows:
                 pod_internal_id = commercial_rows[0].get("POD_Internal_Id__c")
         except Exception as e:
-            append_audit_entry("get_salesforce_account_data", q_account, None, str(e))
+            append_audit_entry("get_salesforce_account_data_bigquery", q_account, None, str(e))
             pass
 
         # Return structured data
@@ -159,7 +210,7 @@ def get_salesforce_account_data(account_name: str) -> dict:
                 "pod_id": None
             }
     except Exception as ex:
-        append_audit_entry("get_salesforce_account_data", None, None, str(ex))
+        append_audit_entry("get_salesforce_account_data_bigquery", None, None, str(ex))
         return {
             "status": "ERROR",
             "error": str(ex),

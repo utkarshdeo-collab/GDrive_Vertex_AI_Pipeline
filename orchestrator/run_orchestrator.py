@@ -214,10 +214,19 @@ def get_routing_data_dictionary(salesforce_path: Path, domo_path: Path) -> str:
 
 def get_nexus_account_snapshot_orchestrated(account_name: str) -> str:
     """Orchestrate fetching Nexus Account Snapshot by combining Salesforce and Domo data.
-    This function:
-    1. Calls salesforce_agent.get_salesforce_account_data() to get Salesforce data + pod_id
-    2. Calls domo_agent.get_pod_data_by_id(pod_id) to get pod metrics
-    3. Merges and formats the combined data
+    
+    Vector-based flow:
+    1. get_salesforce_account_data(account_name):
+       - Build text: "Account {account_name}"
+       - Embed → vector
+       - Query endpoint(filter=SF)
+       - Returns SF data + pod_id
+    2. get_domo_pod_data_by_id(pod_id):
+       - Build text: "POD{pod_id}"
+       - Embed → vector
+       - Query endpoint(filter=Domo)
+       - Returns Domo data
+    3. Join + compute → Nexus Snapshot
     
     Use this when user asks for account snapshot/overview for a specific account."""
     from orchestrator.salesforce_agent import _engagement_from_task_count

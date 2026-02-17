@@ -9,6 +9,12 @@ After this, the deployed index can be queried for Phase 4 (ADK) retrieval.
 """
 import sys
 import time
+from pathlib import Path
+
+# Ensure project root is on path
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import config
 from google.api_core.exceptions import AlreadyExists, FailedPrecondition

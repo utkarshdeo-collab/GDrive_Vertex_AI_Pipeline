@@ -90,8 +90,60 @@ def execute_sql(project_id: str, query: str) -> dict:
 
 
 def get_pod_data_by_id(pod_id: int) -> dict:
-    """Fetch pod data from test_pod table using pod_id. Returns MEAU, ORBIT score, Churn Risk, and Expansion Signal data.
-    Use this when you have a pod_id from Salesforce data and need to get the corresponding Domo metrics."""
+    """Fetch pod data using vector search.
+    
+    Flow:
+    1. Build text: "POD{pod_id}"
+    2. Embed → vector, query endpoint with filter=Domo
+    3. Resolve first result ID via chunks lookup (no BigQuery)
+    4. Return Domo data
+    
+    Falls back to BigQuery only if vector search or lookup fails."""
+    from .vector_endpoint import query_vector_index, load_chunks_lookup
+    from .audit_context import append_audit_entry
+    
+    try:
+        query_text = f"POD{pod_id}"
+        vector_results = query_vector_index(query_text, filter_type="Domo", top_k=5)
+        
+        if vector_results.get("status") != "SUCCESS":
+            return _get_pod_data_by_id_bigquery(pod_id)
+        
+        results = vector_results.get("results", [])
+        if not results:
+            return _get_pod_data_by_id_bigquery(pod_id)
+        
+        first_id = results[0].get("id")
+        if not first_id:
+            return _get_pod_data_by_id_bigquery(pod_id)
+        
+        lookup = load_chunks_lookup()
+        if not lookup or first_id not in lookup:
+            return _get_pod_data_by_id_bigquery(pod_id)
+        
+        entry = lookup[first_id]
+        if entry.get("source") != "Domo":
+            return _get_pod_data_by_id_bigquery(pod_id)
+        
+        pod = entry.get("data") or {}
+        return {
+            "status": "SUCCESS",
+            "pretty_name": pod.get("pretty_name"),
+            "meau": pod.get("meau"),
+            "provisioned_users": pod.get("provisioned_users"),
+            "active_users": pod.get("active_users"),
+            "health_score": pod.get("health_score"),
+            "risk_ratio_for_next_renewal": pod.get("risk_ratio_for_next_renewal"),
+            "contracted_licenses": pod.get("contracted_licenses"),
+        }
+        
+    except Exception as ex:
+        append_audit_entry("get_pod_data_by_id", str(pod_id), None, str(ex))
+        return _get_pod_data_by_id_bigquery(pod_id)
+
+
+def _get_pod_data_by_id_bigquery(pod_id: int) -> dict:
+    """Fallback: Fetch pod data from BigQuery (original implementation)."""
     from .usage_collector import record_bigquery
     from .audit_context import append_audit_entry
     import google.auth
@@ -113,7 +165,7 @@ def get_pod_data_by_id(pod_id: int) -> dict:
             job = client.query(q_pod, project=config.PROJECT_ID)
             pod_rows = list(job.result(max_results=1))
             record_bigquery(job.total_bytes_processed or 0)
-            append_audit_entry("get_pod_data_by_id", q_pod, job.total_bytes_processed or 0, None)
+            append_audit_entry("get_pod_data_by_id_bigquery", q_pod, job.total_bytes_processed or 0, None)
 
             if pod_rows:
                 pod = pod_rows[0]
@@ -133,14 +185,14 @@ def get_pod_data_by_id(pod_id: int) -> dict:
                     "pod_id": pod_id
                 }
         except Exception as e:
-            append_audit_entry("get_pod_data_by_id", q_pod, None, str(e))
+            append_audit_entry("get_pod_data_by_id_bigquery", q_pod, None, str(e))
             return {
                 "status": "ERROR",
                 "error": str(e),
                 "pod_id": pod_id
             }
     except Exception as ex:
-        append_audit_entry("get_pod_data_by_id", None, None, str(ex))
+        append_audit_entry("get_pod_data_by_id_bigquery", None, None, str(ex))
         return {
             "status": "ERROR",
             "error": str(ex),
