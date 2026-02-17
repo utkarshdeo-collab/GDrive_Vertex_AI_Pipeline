@@ -82,6 +82,23 @@ def _print_cost_breakdown(tasks: list) -> None:
     print(f"  {'Total':36} : {'':28} → ${total_cost:.6f}\n")
 
 
+# Keywords for Nexus Hybrid Engine queries (semantic search + analytics)
+_NEXUS_SNAPSHOT_KEYWORDS = (
+    "snapshot", "account snapshot", "show me snapshot", "account overview",
+    "nexus snapshot", "nexus account", "account for", "tell me about account",
+    "find accounts", "search accounts", "accounts owned by", "at-risk accounts",
+    "high churn", "show accounts",
+)
+
+_NEXUS_ANALYTICS_KEYWORDS = (
+    "total arr", "count accounts", "average", "avg", "sum", "calculate",
+    "how many accounts", "engagement status", "expansion signal",
+    "positive engagement", "neutral engagement", "negative engagement",
+    "positive expansion", "negative expansion",
+    "orbit score", "meau", "churn risk", "health score",
+    "by owner", "by engagement", "by expansion",
+)
+
 # Keywords that indicate the question is about Salesforce/BigQuery (not the PDF or Domo)
 _SALESFORCE_KEYWORDS = (
     "arr", "pipeline", "opportunity", "opportunities", "customer", "customers",
@@ -89,9 +106,7 @@ _SALESFORCE_KEYWORDS = (
     "total_arr", "customer_name", "contract", "renewal", "license", "licenses",
     "stage", "closed won", "close date", "owner", "contracted", "antino bank",
     "abc capital", "sf_account", "sf_opportunity",
-    "snapshot", "all accounts", "commercial snapshot", "account overview",
-    "nexus snapshot", "nexus account", "orbit score", "meau", "churn risk",
-    "account for", "tell me about account",
+    "all accounts", "commercial snapshot",
 )
 
 # Keywords that indicate the question is about Domo/BigQuery (not the PDF or Salesforce).
@@ -337,7 +352,8 @@ def get_nexus_account_snapshot_orchestrated(account_name: str) -> str:
 
 
 def build_agents(credentials, routing_data_dict: str):
-    """Build PDF agent, Salesforce agent, Domo agent, and master orchestrator from sub-agent modules."""
+    """Build PDF agent, Salesforce agent (Vector Search), Domo agent (Vector Search), and master orchestrator."""
+    
     model = Gemini(
         model_name=config.GEMINI_MODEL,
         project=config.PROJECT_ID,
@@ -349,8 +365,21 @@ def build_agents(credentials, routing_data_dict: str):
     pdf_agent = create_pdf_agent()
     salesforce_agent = create_salesforce_agent(credentials)
     domo_agent = create_domo_agent(credentials)
+    
+    # Initialize Nexus agents (if available)
+    if NEXUS_AGENTS_AVAILABLE:
+        try:
+            print("[Orchestrator] Initializing Nexus Snapshot Agent...")
+            _nexus_snapshot_agent = NexusSnapshotAgent()
+            print("[Orchestrator] Initializing Nexus Analytics Agent...")
+            _nexus_analytics_agent = NexusAnalyticsAgent()
+            print("[Orchestrator] Nexus agents initialized successfully!")
+        except Exception as e:
+            print(f"[Orchestrator] WARNING: Failed to initialize Nexus agents: {e}")
+            _nexus_snapshot_agent = None
+            _nexus_analytics_agent = None
 
-    # Master agent: route using data dictionary; orchestrates Salesforce + Domo for account snapshots
+    # Master agent: route using data dictionary; orchestrates Salesforce + Domo + Nexus
     master_instruction = f"""You are the master assistant. Route each user question to the appropriate specialist(s).
 
 {routing_data_dict}
@@ -361,6 +390,11 @@ ROUTING RULES:
 - If the user message starts with "[ROUTING: ... pdf_agent only.]": you MUST delegate to pdf_agent (do not use salesforce_agent or domo_agent).
 - If the question is about the UPLOADED DOCUMENT or PDF (reports, case studies, implementation cost, change management, budget, lessons learned, post-implementation, executive summary, tables in the document): delegate to pdf_agent.
 - If the user asks for a summary or content of a NAMED document (e.g. SYM_1PGR_Insurance, SYM_1PGR_Federation, InsurTech, ARK Capital Case Study, Symphony for Wealth/Insurance, or any report/document title): delegate to pdf_agent. These are indexed PDF documents, not Domo or Salesforce data.
+
+NEXUS HYBRID ENGINE (Semantic Search + Analytics):
+- If the user asks to FIND or SEARCH for accounts by name, owner, or characteristics (e.g., "Show me snapshot for Antino Bank", "Find accounts owned by Nikhil", "At-risk accounts"): use **nexus_semantic_search(query="...")** tool.
+- If the user asks to CALCULATE, COUNT, or AGGREGATE account data (e.g., "Total ARR for Positive engagement", "Count accounts by engagement status", "Average MEAU"): use **nexus_analytics_calculation(query="...")** tool.
+- The Nexus tools handle Salesforce + Domo data combined (1,002 accounts with engagement, expansion, ARR, MEAU, churn risk, etc.).
 
 ACCOUNT SNAPSHOT REQUESTS (orchestrates Salesforce + Domo):
 - If the user asks for an account snapshot, overview, or detailed information about a SPECIFIC ACCOUNT BY NAME (e.g. "account for ABC Capital", "snapshot for Antino Bank", "tell me about Global Financial"): use **get_nexus_account_snapshot_orchestrated(account_name="...")** tool.
@@ -377,11 +411,23 @@ OTHER DOMO QUESTIONS:
 
 After you get the answer, present it clearly to the user."""
 
+    # Build tools list
+    tools = [
+        FunctionTool(get_nexus_account_snapshot_orchestrated),
+    ]
+    
+    # Add Nexus tools if available
+    if NEXUS_AGENTS_AVAILABLE and _nexus_snapshot_agent and _nexus_analytics_agent:
+        tools.extend([
+            FunctionTool(nexus_semantic_search),
+            FunctionTool(nexus_analytics_calculation),
+        ])
+
     master_agent = LlmAgent(
         model=model,
         name="orchestrator",
         instruction=master_instruction,
-        tools=[FunctionTool(get_nexus_account_snapshot_orchestrated)],
+        tools=tools,
         sub_agents=[pdf_agent, salesforce_agent, domo_agent],
         before_agent_callback=before_agent_audit_callback,
         after_agent_callback=after_agent_audit_callback,

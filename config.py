@@ -101,3 +101,73 @@ AUDIT_DATASET = os.environ.get("AUDIT_DATASET", "orchestrator_logs")
 AUDIT_TABLE = os.environ.get("AUDIT_TABLE", "orchestrator_audit")
 # Region for audit dataset (create if not exists). Use same as LOCATION.
 AUDIT_REGION = os.environ.get("AUDIT_REGION", LOCATION)
+
+# ================= BIGQUERY VECTOR SEARCH (embedding creation only) =================
+# New dataset for embedded tables (same rows as source + embedding column). Used by bq_vector_setup scripts only.
+EMBEDDING_DATASET = os.environ.get("EMBEDDING_DATASET", "embedding_tables")
+
+# ================= NEXUS HYBRID ENGINE (Salesforce + Domo Account Snapshots) =================
+# Separate from PDF pipeline - handles CSV-based account snapshots with dual engines:
+#   - Vector Engine: Semantic search via Vertex AI Vector Search
+#   - Analytics Engine: In-memory Pandas for exact calculations
+
+# Data Sources (local CSV/Excel files)
+from pathlib import Path
+NEXUS_DATA_DIR = Path(__file__).parent / "Sf_and_Domo"
+NEXUS_SALESFORCE_FILE = "Nexus_Account_Info_Exact_Columns.xlsx"
+NEXUS_DOMO_FILE = "TEST_Pod Summary Insights - Monthly Pod Metrics.csv.xlsx"
+
+# GCS Storage (dedicated bucket for Nexus data)
+NEXUS_GCS_BUCKET = os.environ.get("NEXUS_GCS_BUCKET", "symphony-nexus-data-core")
+NEXUS_GCS_RAW_PREFIX = "raw_inputs"
+NEXUS_GCS_EMBEDDINGS_PREFIX = "embeddings"
+NEXUS_GCS_ANALYTICS_PREFIX = "analytics"
+
+# Vector Search Index (separate from PDF doc-pipeline-index)
+NEXUS_VECTOR_INDEX_DISPLAY_NAME = "nexus_hybrid_index"
+NEXUS_VECTOR_INDEX_ID = os.environ.get("NEXUS_VECTOR_INDEX_ID", "1379935471370502144")
+NEXUS_INDEX_ENDPOINT_DISPLAY_NAME = "nexus-hybrid-endpoint"
+NEXUS_INDEX_ENDPOINT_RESOURCE_NAME = os.environ.get("NEXUS_INDEX_ENDPOINT_RESOURCE", "projects/913936335566/locations/us-east4/indexEndpoints/3048976530148425728")
+NEXUS_DEPLOYED_INDEX_ID = "nexus_deployed_v1"
+
+# Embedding Configuration (reuses text-embedding-004 from PDF pipeline)
+NEXUS_EMBEDDING_MODEL = EMBEDDING_MODEL  # "text-embedding-004"
+NEXUS_EMBEDDING_DIM = 768
+NEXUS_DISTANCE_MEASURE = "COSINE_DISTANCE"
+
+# Output Files
+NEXUS_ANALYTICS_PARQUET_FILE = "nexus_analytics.parquet"
+NEXUS_ANALYTICS_PARQUET_GCS = f"gs://{NEXUS_GCS_BUCKET}/{NEXUS_GCS_ANALYTICS_PREFIX}/{NEXUS_ANALYTICS_PARQUET_FILE}"
+NEXUS_VECTORS_INPUT_JSONL = "nexus_vectors_input.jsonl"
+NEXUS_VECTORS_EMBEDDED_JSONL = "nexus_vectors_embedded.jsonl"
+NEXUS_VECTORS_INPUT_GCS = f"gs://{NEXUS_GCS_BUCKET}/{NEXUS_GCS_EMBEDDINGS_PREFIX}/{NEXUS_VECTORS_INPUT_JSONL}"
+NEXUS_VECTORS_EMBEDDED_GCS = f"gs://{NEXUS_GCS_BUCKET}/{NEXUS_GCS_EMBEDDINGS_PREFIX}/{NEXUS_VECTORS_EMBEDDED_JSONL}"
+
+# Business Logic Rules
+NEXUS_ENGAGEMENT_POSITIVE_THRESHOLD = 4  # Task_Count >= 4 → Positive
+NEXUS_ENGAGEMENT_NEUTRAL_MIN = 1         # Task_Count 1-3 → Neutral
+NEXUS_ENGAGEMENT_NEUTRAL_MAX = 3
+NEXUS_EXPANSION_THRESHOLD = 0.9          # provisioned_users > 90% of contracted → Positive
+
+# Deduplication Strategy
+NEXUS_DOMO_DEDUP_STRATEGY = "most_recent"  # Keep row with latest 'month' per pod_id
+
+# Metadata Fields for Vector Search Filtering
+NEXUS_VECTOR_METADATA_FIELDS = ["account_name", "owner", "calculated_engagement", "pod_id"]
+
+# Golden Record Template
+NEXUS_GOLDEN_RECORD_TEMPLATE = """[ACCOUNT] {Customer_Name}
+[OWNER] {Account_Owner}
+[TOTAL_ARR] {Total_ARR}
+[RENEWAL_DATE] {Renewal_Date}
+[ENGAGEMENT_STATUS] {Calculated_Engagement}
+[EXPANSION_SIGNAL] {Calculated_Expansion}
+[ORBIT_SCORE] {Mapped_ORBIT}
+[CHURN_RISK] {Mapped_Churn}
+[MEAU] {meau}
+[POD_ID] {POD_Internal_Id__c}
+[PROVISIONED_USERS] {provisioned_users}
+[CONTRACTED_LICENSES] {contracted_licenses}
+[HEALTH_SCORE] {health_score}
+[ACTIVE_USERS] {active_users}"""
+
