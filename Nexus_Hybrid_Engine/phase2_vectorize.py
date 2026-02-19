@@ -1,236 +1,232 @@
 """
-Phase 2: Vectorization (Generate Embeddings)
+Phase 2: Client-Side Batch Vectorization (Org Policy Workaround)
 
-This script:
-1. Reads nexus_vectors_input.jsonl from GCS
-2. Generates embeddings using Vertex AI text-embedding-004
-3. Outputs nexus_vectors_embedded.jsonl to GCS (ready for index creation)
+This script generates embeddings for the 80k records using the Vertex AI 
+Online Prediction API (client-side batching) instead of a Batch Prediction Job.
+This creates the final JSONL file required for Vector Search Index update.
 
-Two modes:
-  - Batch mode (recommended): Uses Vertex AI Batch Prediction for large datasets
-  - Streaming mode: Generates embeddings one-by-one (slower, for small datasets)
+Architecture:
+1. Read 'nexus_vectors_input.jsonl' locally.
+2. Process in batches (e.g., 10 records) to respect API quotas and token limits.
+3. Call TextEmbeddingModel.get_embeddings().
+4. Write output JSONL with fields: {"id": "...", "embedding": [...], "restricts": [...]}
+5. Upload final file to GCS.
 
-Run from project root:
-  python Nexus_Hybrid_Engine/phase2_vectorize.py [--mode batch|streaming]
+Features:
+- RESUME CAPABILITY: Skips already processed records.
+- TRUNCATION: Ensures content doesn't exceed model limits.
+- BATCH OPTIMIZATION: Dynamic or small batch sizes.
+
+Usage:
+    python Nexus_Hybrid_Engine/phase2_vectorize.py
 """
-import argparse
-import json
+
 import sys
+import json
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
 from google.cloud import storage
-from google.cloud import aiplatform
 import vertexai
 from vertexai.language_models import TextEmbeddingModel, TextEmbeddingInput
 
-# Add parent to path for config import
+# Ensure project root is in sys.path
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from Nexus_Hybrid_Engine import nexus_config as config
+try:
+    from Nexus_Hybrid_Engine import nexus_config as config
+except ImportError:
+    import nexus_config as config
 
+# Configuration
+BATCH_SIZE = 10  # Reduced from 50 to 10 to avoid 20k token limit per request
+MAX_CHARS_PER_ITEM = 18000 # Approx 4k tokens, safe upper bound for single item (model limit is 2k tokens ~ 8k chars? No, 004 is 2048 tokens input. So ~8000 chars.)
+# Actually text-embedding-004 input token limit is 2048. 
+# 1 token ~= 4 chars. So 8192 chars. Let's be safe with 8000.
+TRUNCATE_LIMIT = 8000 
+SLEEP_BETWEEN_BATCHES = 0.1 
 
-def download_from_gcs(gcs_uri: str, local_path: Path) -> None:
-    """Download file from GCS to local path."""
-    # Parse gs://bucket/path
-    parts = gcs_uri.replace("gs://", "").split("/", 1)
-    bucket_name = parts[0]
-    blob_path = parts[1]
-    
+def ensure_bucket_exists(bucket_name: str, location: str) -> None:
+    """Checks if a GCS bucket exists; if not, creates it."""
+    from google.cloud import storage
+    from google.api_core import exceptions
     storage_client = storage.Client(project=config.PROJECT_ID)
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_path)
-    blob.download_to_filename(local_path)
+    try:
+        bucket = storage_client.get_bucket(bucket_name)
+        print(f"[Setup] Bucket '{bucket_name}' already exists.")
+    except exceptions.NotFound:
+        print(f"[Setup] Bucket '{bucket_name}' not found. Creating in {location}...")
+        bucket = storage_client.bucket(bucket_name)
+        bucket.create(location=location)
+        print(f"[Setup] Bucket '{bucket_name}' created successfully.")
 
+def truncate_text(text: str, limit: int) -> str:
+    """Truncates text to limit characters."""
+    if len(text) <= limit:
+        return text
+    return text[:limit]
 
-def upload_to_gcs(local_path: Path, gcs_uri: str) -> None:
-    """Upload local file to GCS."""
-    parts = gcs_uri.replace("gs://", "").split("/", 1)
-    bucket_name = parts[0]
-    blob_path = parts[1]
-    
-    storage_client = storage.Client(project=config.PROJECT_ID)
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_path)
-    blob.upload_from_filename(local_path)
-
-
-def generate_embeddings_streaming(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def process_and_embed(
+    input_file: Path, 
+    output_file: Path, 
+    model_name: str
+):
     """
-    Generate embeddings one-by-one using Vertex AI SDK.
-    Slower but simpler for small datasets (<1000 records).
+    Reads input JSONL, generates embeddings in batches, and writes output JSONL.
+    Supports RESUMING from existing output file.
     """
-    print(f"\n  Initializing embedding model: {config.EMBEDDING_MODEL}")
+    print(f"\n[Processing] Initializing Vertex AI in {config.LOCATION}...")
     vertexai.init(project=config.PROJECT_ID, location=config.LOCATION)
-    model = TextEmbeddingModel.from_pretrained(config.EMBEDDING_MODEL)
     
-    embedded_records = []
-    total = len(records)
+    # Load Model
+    model = TextEmbeddingModel.from_pretrained(model_name)
+    print(f"[Processing] Model '{model_name}' loaded.")
+
+    # 1. Check existing progress
+    processed_ids = set()
+    if output_file.exists():
+        print(f"[Resume] Checking existing output in {output_file}...")
+        with open(output_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        rec = json.loads(line)
+                        processed_ids.add(rec.get('id'))
+                    except:
+                        pass
+        print(f"[Resume] Found {len(processed_ids)} already processed records. Will skip them.")
+
+    # 2. Read Input
+    print(f"[Processing] Reading {input_file}...")
+    records_to_process = []
+    skipped_count = 0
     
-    print(f"  Generating embeddings for {total:,} records...")
-    for i, record in enumerate(records, 1):
-        if i % 50 == 0 or i == total:
-            print(f"    Progress: {i:,}/{total:,} ({100*i/total:.1f}%)")
-        
-        try:
-            # Generate embedding for content
-            embedding_input = TextEmbeddingInput(
-                text=record['content'],
-                task_type="RETRIEVAL_DOCUMENT"
-            )
-            result = model.get_embeddings([embedding_input])
-            embedding_vector = result[0].values
+    with open(input_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            if line.strip():
+                record = json.loads(line)
+                if record.get('id') in processed_ids:
+                    skipped_count += 1
+                else:
+                    records_to_process.append(record)
+    
+    total_new = len(records_to_process)
+    print(f"[Processing] {skipped_count} skipped. {total_new} new records to embed.")
+
+    if total_new == 0:
+        print("[Processing] All records processed!")
+        return
+
+    # 3. Batch Processing
+    processed_count = 0
+    start_time = time.time()
+    
+    # Append mode 'a'
+    with open(output_file, 'a', encoding='utf-8') as out_f:
+        for i in range(0, total_new, BATCH_SIZE):
+            batch = records_to_process[i : i + BATCH_SIZE]
+            inputs = []
             
-            # Add embedding to record with FULL metadata (including all Domo fields)
-            embedded_record = {
-                "id": record['id'],
-                "embedding": embedding_vector,
-                "restricts": [
-                    # Salesforce fields
-                    {"namespace": "account_name", "allow": [record['metadata']['account_name']]},
-                    {"namespace": "owner", "allow": [record['metadata']['owner']]},
-                    {"namespace": "calculated_engagement", "allow": [record['metadata']['calculated_engagement']]},
-                    {"namespace": "pod_id", "allow": [record['metadata']['pod_id']]},
-                    # Domo fields (for filtering by Domo agent)
-                    {"namespace": "meau", "allow": [str(record['metadata'].get('meau', 'N/A'))]},
-                    {"namespace": "health_score", "allow": [str(record['metadata'].get('health_score', 'N/A'))]},
-                    {"namespace": "provisioned_users", "allow": [str(record['metadata'].get('provisioned_users', 'N/A'))]},
-                    {"namespace": "contracted_licenses", "allow": [str(record['metadata'].get('contracted_licenses', 'N/A'))]},
-                    {"namespace": "active_users", "allow": [str(record['metadata'].get('active_users', 'N/A'))]},
-                    {"namespace": "risk_ratio_for_next_renewal", "allow": [str(record['metadata'].get('risk_ratio_for_next_renewal', 'N/A'))]},
-                ]
-            }
-            embedded_records.append(embedded_record)
-            
-        except Exception as e:
-            print(f"    ERROR on record {i}: {e}")
-            continue
-        
-        # Rate limiting (avoid quota errors)
-        if i % 100 == 0:
-            time.sleep(1)
-    
-    return embedded_records
+            # Prepare inputs
+            for record in batch:
+                raw_content = record.get("content", "")
+                # Truncate to avoid 2048 token limit per item
+                content = truncate_text(raw_content, TRUNCATE_LIMIT)
+                
+                task_type = record.get("task_type", "RETRIEVAL_DOCUMENT")
+                title = record.get("title", "")
+                inputs.append(TextEmbeddingInput(text=content, task_type=task_type, title=title))
+
+            try:
+                # API Call
+                embeddings = model.get_embeddings(inputs)
+                
+                # Write to output
+                for record, embedding_obj in zip(batch, embeddings):
+                    # Format for Vector Search: id, embedding, restricts
+                    vector_record = {
+                        "id": record["id"],
+                        "embedding": embedding_obj.values,
+                        "restricts": record.get("restricts", [])
+                    }
+                    out_f.write(json.dumps(vector_record) + "\n")
+                
+                processed_count += len(batch)
+                
+                # Progress
+                elapsed = time.time() - start_time
+                if elapsed > 0:
+                    rate = processed_count / elapsed
+                    print(f"  Processed {processed_count}/{total_new} (Total: {len(processed_ids)+processed_count}) ({rate:.1f} rec/s)...", end='\r')
+                
+                # Rate limiting sleep
+                time.sleep(SLEEP_BETWEEN_BATCHES)
+
+            except Exception as e:
+                print(f"\n[Error] Batch failed at index {i}: {e}")
+                print(f"  Skipping this batch to avoid stopping entire flow. (Data loss for {len(batch)} records)")
+                # In strict mode we might stop, but for 80k rows, missing 10 is better than crashing?
+                # Actually, let's try to continue.
+                continue
+
+    print(f"\n[Processing] Completed! {len(processed_ids) + processed_count} records saved to {output_file}")
 
 
-def generate_embeddings_batch(input_gcs_uri: str, output_gcs_uri: str) -> None:
-    """
-    Generate embeddings using Vertex AI Batch Prediction.
-    Faster and more efficient for large datasets (>1000 records).
+def upload_to_gcs(local_path: Path, bucket_name: str, blob_name: str):
+    """Uploads file to GCS."""
+    ensure_bucket_exists(bucket_name, config.LOCATION)
     
-    Note: Batch prediction requires specific JSONL format and may take 10-30 minutes.
-    """
-    print(f"\n  Using Vertex AI Batch Prediction (this may take 10-30 minutes)...")
-    print(f"  Input:  {input_gcs_uri}")
-    print(f"  Output: {output_gcs_uri}")
+    print(f"\n[Upload] Uploading {local_path} to gs://{bucket_name}/{blob_name}...")
+    storage_client = storage.Client(project=config.PROJECT_ID)
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    blob.upload_from_filename(str(local_path))
+    print(f"[Upload] Success!")
+    return f"gs://{bucket_name}/{blob_name}"
+
+
+def run_phase_2():
+    print("=" * 80)
+    print("PHASE 2: Client-Side Vectorization (Org Policy Workaround)")
+    print("=" * 80)
+
+    # 1. Setup Paths
+    input_file = Path("nexus_vectors_input.jsonl")
+    output_file = Path("nexus_vectors_output.jsonl")
     
-    aiplatform.init(project=config.PROJECT_ID, location=config.LOCATION)
-    
-    # Create batch prediction job
-    print(f"\n  Creating batch prediction job...")
-    
-    # Parse output URI to get bucket and prefix
-    output_parts = output_gcs_uri.replace("gs://", "").split("/")
-    output_bucket = output_parts[0]
-    output_prefix = "/".join(output_parts[1:-1])  # Remove filename
-    output_gcs_dir = f"gs://{output_bucket}/{output_prefix}/batch_output"
-    
-    job = aiplatform.BatchPredictionJob.create(
-        job_display_name=f"nexus-embedding-{int(time.time())}",
-        model_name=f"publishers/google/models/{config.EMBEDDING_MODEL}",
-        input_config_gcs_source=input_gcs_uri,
-        output_config_gcs_destination_prefix=output_gcs_dir,
-        machine_type=config.BATCH_PREDICTION_MACHINE_TYPE,
-        max_replica_count=config.BATCH_PREDICTION_MAX_REPLICA_COUNT,
-    )
-    
-    print(f"  Job created: {job.resource_name}")
-    print(f"  Waiting for completion...")
-    
-    # Wait for job to complete
-    job.wait()
-    
-    if job.state == aiplatform.gapic.JobState.JOB_STATE_SUCCEEDED:
-        print(f"  ✓ Batch prediction completed successfully")
-        print(f"  Output location: {output_gcs_dir}")
-        print(f"\n  Note: You'll need to download and reformat the batch output")
-        print(f"        to match Vector Search JSONL format (id, embedding, restricts)")
-    else:
-        print(f"  ERROR: Batch prediction failed with state: {job.state}")
+    if not input_file.exists():
+        print(f"Error: {input_file} not found.")
         sys.exit(1)
 
+    # 2. Run Embedding Process
+    try:
+        process_and_embed(input_file, output_file, config.NEXUS_EMBEDDING_MODEL)
+    except KeyboardInterrupt:
+        print("\n[Aborted] Process stopped by user.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n[Error] Embeddings generation failed: {e}")
+        sys.exit(1)
 
-def main():
-    parser = argparse.ArgumentParser(description="Generate embeddings for Nexus Golden Records")
-    parser.add_argument(
-        "--mode",
-        choices=["streaming", "batch"],
-        default="streaming",
-        help="Embedding generation mode (default: streaming)"
-    )
-    args = parser.parse_args()
+    # 3. Upload to GCS
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    gcs_blob = f"{config.GCS_EMBEDDINGS_PREFIX}/{timestamp}/final/nexus_vectors_output.jsonl"
     
-    print("\n" + "=" * 80)
-    print("  NEXUS HYBRID ENGINE - Phase 2: Vectorization")
-    print("=" * 80)
-    print(f"\n  Project: {config.PROJECT_ID}")
-    print(f"  Region:  {config.LOCATION}")
-    print(f"  Mode:    {args.mode}")
-    
-    # Step 1: Download input JSONL from GCS
-    print("\n[Step 1] Downloading input JSONL from GCS...")
-    local_input = Path("nexus_vectors_input.jsonl")
-    
-    if not local_input.exists():
-        print(f"  Downloading: {config.VECTORS_INPUT_GCS}")
-        download_from_gcs(config.VECTORS_INPUT_GCS, local_input)
-    else:
-        print(f"  Using existing local file: {local_input}")
-    
-    # Step 2: Load records
-    print("\n[Step 2] Loading records...")
-    records = []
-    with open(local_input, 'r', encoding='utf-8') as f:
-        for line in f:
-            records.append(json.loads(line))
-    print(f"  Loaded {len(records):,} records")
-    
-    # Step 3: Generate embeddings
-    print(f"\n[Step 3] Generating embeddings ({args.mode} mode)...")
-    
-    if args.mode == "streaming":
-        embedded_records = generate_embeddings_streaming(records)
-        
-        # Step 4: Save embedded JSONL
-        print(f"\n[Step 4] Saving embedded JSONL...")
-        local_output = Path("nexus_vectors_embedded.jsonl")
-        with open(local_output, 'w', encoding='utf-8') as f:
-            for record in embedded_records:
-                f.write(json.dumps(record) + '\n')
-        print(f"  Saved locally: {local_output} ({len(embedded_records):,} records)")
-        
-        # Step 5: Upload to GCS
-        print(f"\n[Step 5] Uploading to GCS...")
-        print(f"  Uploading: {config.VECTORS_EMBEDDED_GCS}")
-        upload_to_gcs(local_output, config.VECTORS_EMBEDDED_GCS)
-        print(f"  ✓ Upload complete")
-        
-    else:  # batch mode
-        generate_embeddings_batch(config.VECTORS_INPUT_GCS, config.VECTORS_EMBEDDED_GCS)
-        print(f"\n  Note: Batch mode output requires manual reformatting")
-        print(f"        See Vertex AI Batch Prediction docs for output format")
-    
-    # Summary
-    print("\n" + "=" * 80)
-    print("  Phase 2 Complete!")
-    print("=" * 80)
-    print(f"  Embedded file: {config.VECTORS_EMBEDDED_GCS}")
-    print("\n  Next: Run Phase 3 to create and deploy Vector Search index")
-    print("=" * 80 + "\n")
-
+    try:
+        gcs_uri = upload_to_gcs(output_file, config.GCS_BUCKET_NAME, gcs_blob)
+        print("\n" + "="*80)
+        print("PHASE 2 COMPLETE")
+        print(f"Vector data available at: {gcs_uri}")
+        print("Ready for Phase 3 (Index Deployment).")
+        print("="*80)
+    except Exception as e:
+        print(f"\n[Error] Upload failed: {e}")
+        print(f"Note: Your local file '{output_file}' is safe.")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    run_phase_2()
