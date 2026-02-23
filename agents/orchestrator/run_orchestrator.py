@@ -384,8 +384,12 @@ async def main():
     vertexai.init(project=config.PROJECT_ID, location=config.LOCATION)
 
     # Authentication
+    # IMPORTANT: Must pass scopes explicitly when using a service account JSON file.
+    # Without scopes, google.auth.default() returns unscoped credentials that
+    # cannot refresh their token (causes 'invalid_scope' error).
+    _SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
     try:
-        credentials, _ = google.auth.default()
+        credentials, _ = google.auth.default(scopes=_SCOPES)
         if not credentials.valid:
             credentials.refresh(google_requests.Request())
     except Exception as e:

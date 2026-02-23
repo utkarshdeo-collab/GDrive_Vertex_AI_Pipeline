@@ -16,6 +16,15 @@ os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = PROJECT_ID
 os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "1"
 os.environ["GOOGLE_CLOUD_LOCATION"] = LOCATION
 
+# ================= SERVICE ACCOUNT AUTH =================
+# If a service account key exists at the project root, use it automatically.
+# This overrides any existing gcloud auth without changing any agent code.
+# All calls to google.auth.default() will transparently pick up this key.
+_SA_KEY_PATH = Path(__file__).resolve().parent.parent / "credentials" / "service_account.json"
+if _SA_KEY_PATH.exists() and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_SA_KEY_PATH)
+    print(f"[nexus_config] Using service account: {_SA_KEY_PATH.name}")
+
 # ================= PRICING (public list prices) =================
 # Override with env if needed. See cloud.google.com/vertex-ai/pricing and cloud.google.com/bigquery/pricing.
 GEMINI_INPUT_PER_1M_TOKENS = float(os.environ.get("GEMINI_INPUT_PER_1M_TOKENS", "0.075"))   # Gemini 2.0 Flash input $/1M tokens

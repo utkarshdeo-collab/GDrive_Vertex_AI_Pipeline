@@ -9,6 +9,9 @@ chunks.jsonl
 *.log
 embeddings_partial.jsonl
 
-# Sensitive (if any)
+# Sensitive — NEVER commit these
 .env
 credentials.json
+credentials/
+*.json.key
+service_account*.json
