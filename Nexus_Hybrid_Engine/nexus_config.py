@@ -45,11 +45,6 @@ AUDIT_REGION = os.environ.get("AUDIT_REGION", LOCATION)
 #   - Vector Engine: Semantic search via Vertex AI Vector Search
 #   - Analytics Engine: In-memory Pandas for exact calculations
 
-# Data Sources (local CSV/Excel files)
-NEXUS_DATA_DIR = Path(__file__).parent / "Sf_and_Domo"
-NEXUS_SALESFORCE_FILE = "Nexus_Account_Info_Exact_Columns.xlsx"
-NEXUS_DOMO_FILE = "TEST_Pod Summary Insights - Monthly Pod Metrics.csv.xlsx"
-
 # GCS Storage (dedicated bucket for Nexus data)
 NEXUS_GCS_BUCKET = os.environ.get("NEXUS_GCS_BUCKET", "nexus-hybrid-engine-80k-prod") # Updated to verified bucket
 NEXUS_GCS_RAW_PREFIX = "raw_inputs"
@@ -75,8 +70,24 @@ NEXUS_ANALYTICS_PARQUET_FILE = "nexus_analytics.parquet"
 NEXUS_ANALYTICS_PARQUET_GCS = f"gs://{NEXUS_GCS_BUCKET}/{NEXUS_GCS_ANALYTICS_PREFIX}/{NEXUS_ANALYTICS_PARQUET_FILE}"
 NEXUS_VECTORS_INPUT_JSONL = "nexus_vectors_input.jsonl"
 NEXUS_VECTORS_EMBEDDED_JSONL = "nexus_vectors_embedded.jsonl"
-# Updated after Phase 2 success - POINTING TO DIRECTORY
-NEXUS_VECTORS_EMBEDDED_GCS_DIR = f"gs://{NEXUS_GCS_BUCKET}/{NEXUS_GCS_EMBEDDINGS_PREFIX}/batch_init/20260219_0034/final"
+# Dynamically resolved at runtime — always points to the latest Phase 2 output.
+# Phase 2 uploads to: gs://{bucket}/embeddings/{timestamp}/final/
+# Phase 3 scans the embeddings/ prefix and picks the most recent folder automatically.
+def _resolve_latest_embeddings_dir(bucket: str, prefix: str) -> str:
+    """Scan GCS and return the most recent Phase 2 output directory."""
+    try:
+        from google.cloud import storage as _storage
+        client = _storage.Client()
+        blobs = list(client.list_blobs(bucket, prefix=f"{prefix}/"))
+        dirs = sorted({b.name.split("/")[1] for b in blobs if "/" in b.name}, reverse=True)
+        if dirs:
+            return f"gs://{bucket}/{prefix}/{dirs[0]}/final"
+    except Exception:
+        pass
+    # Fallback to last known good path if GCS is unreachable at import time
+    return f"gs://{bucket}/{prefix}/batch_init/20260219_0034/final"
+
+NEXUS_VECTORS_EMBEDDED_GCS_DIR = _resolve_latest_embeddings_dir(NEXUS_GCS_BUCKET, NEXUS_GCS_EMBEDDINGS_PREFIX)
 
 # Business Logic Rules
 NEXUS_ENGAGEMENT_POSITIVE_THRESHOLD = 4  # Task_Count >= 4 → Positive

@@ -43,8 +43,8 @@ class VectorDeployer:
         """Initialize the deployer with configuration."""
         self.project_id = config.PROJECT_ID
         self.location = config.LOCATION
-        self.bucket_name = config.GCS_BUCKET_NAME
-        self.gcs_uri = config.VECTORS_EMBEDDED_GCS
+        self.bucket_name = config.NEXUS_GCS_BUCKET
+        self.gcs_uri = config.NEXUS_VECTORS_EMBEDDED_GCS_DIR
         
         # Index Settings
         self.display_name = "nexus-hybrid-index"

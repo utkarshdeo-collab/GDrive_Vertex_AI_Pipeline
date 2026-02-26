@@ -12,12 +12,15 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 import pandas as pd
 import numpy as np
+import requests
+import pandasql as pdsql
 
 # Ensure project root is in sys.path for config import
 _ROOT = Path(__file__).resolve().parent.parent
@@ -29,10 +32,149 @@ try:
 except ImportError:
     import nexus_config as config
 
-# --- CONFIGURATION ---
-# override config for 80k scale production
-config.GCS_BUCKET_NAME = "nexus-hybrid-engine-80k-prod"
-config.GCS_EMBEDDINGS_PREFIX = "embeddings/batch_init"
+# --- DOMO API CONFIGURATION ---
+# testMode = True  → reads local CSV (no real API call). Safe for dev/demo.
+# testMode = False → calls real Domo API. Fill in the 3 credentials below before going live.
+_DOMO_CONFIG = {
+    "testMode": True,
+
+    # Real Domo credentials — only needed when testMode = False
+    "domoClientId":     "YOUR_DOMO_CLIENT_ID",
+    "domoClientSecret": "YOUR_DOMO_CLIENT_SECRET",
+    "domoDatasetId":    "YOUR_DOMO_DATASET_ID",
+
+    # Local CSV fallback — used when testMode = True
+    "csvPath": str(Path(__file__).resolve().parent.parent / "SF_and_DOMO" / "TEST_Pod_Appended_40000_Rows_FIXED.csv"),
+}
+
+# SQL query — selects exact fields needed for golden records.
+# Column names must match the live Domo dataset when testMode = False.
+_DOMO_SQL = """
+SELECT
+    pod_id,
+    pretty_name,
+    meau,
+    active_users,
+    avg_daily_msg_sent,
+    provisioned_users,
+    health_score,
+    risk_ratio_for_next_renewal,
+    contracted_licenses,
+    month,
+    latest_health_score,
+    next_renewal_date,
+    account_owner,
+    total_arr
+FROM domo_data
+"""
+
+_domo_session = None  # module-level token cache
+
+# --- SALESFORCE BIGQUERY CONFIGURATION ---
+# Client fills in these 3 values to point to their Salesforce BQ table.
+# Auth uses the same service account already configured in nexus_config.py.
+_BQ_CONFIG = {
+    "projectId": "YOUR_GCP_PROJECT_ID",
+    "dataset":   "YOUR_BQ_DATASET",
+    "table":     "YOUR_BQ_TABLE_NAME",
+}
+
+# Selects only the exact 10 columns needed for golden records.
+# Column names must match the client's BigQuery table schema.
+_SF_SQL = """
+SELECT
+    Salesforce_Account_ID,
+    Account_Owner,
+    Contract_End_Date,
+    Total_ARR,
+    Client_Engagement_Lead,
+    Renewal_Date,
+    Customer_Name,
+    Firm_ID,
+    POD_Internal_Id__c,
+    Task_Count
+FROM `{project}.{dataset}.{table}`
+"""
+
+
+def query_salesforce_bq() -> pd.DataFrame:
+    """
+    Fetch Salesforce data from BigQuery and return as a DataFrame.
+    Uses the service account credentials already configured in nexus_config.py.
+
+    Returns:
+        pd.DataFrame: Query results with the 10 required Salesforce columns.
+    """
+    from google.cloud import bigquery
+
+    project = _BQ_CONFIG["projectId"]
+    dataset = _BQ_CONFIG["dataset"]
+    table   = _BQ_CONFIG["table"]
+
+    sql = _SF_SQL.format(project=project, dataset=dataset, table=table)
+
+    print(f"[Salesforce] Querying BigQuery: `{project}.{dataset}.{table}`")
+    client = bigquery.Client(project=project)
+    df = client.query(sql).to_dataframe()
+    print(f"[Salesforce] BigQuery returned {len(df):,} rows.")
+    return df
+
+
+def domoAuthenticate() -> str:
+    """
+    Authenticate with Domo API and return an access token.
+    In testMode: skips real auth, returns dummy token.
+    In production: calls real Domo OAuth endpoint.
+    """
+    global _domo_session
+
+    if _DOMO_CONFIG["testMode"]:
+        print("[Domo] testMode=True — skipping real auth, using dummy token.")
+        _domo_session = "TEST_DUMMY_TOKEN"
+        return _domo_session
+
+    print("[Domo] Authenticating with Domo API...")
+    r = requests.get(
+        "https://api.domo.com/oauth/token?grant_type=client_credentials&scope=data",
+        auth=(_DOMO_CONFIG["domoClientId"], _DOMO_CONFIG["domoClientSecret"])
+    )
+    r.raise_for_status()
+    _domo_session = json.loads(r.text)["access_token"]
+    print("[Domo] Auth successful.")
+    return _domo_session
+
+
+def queryDataSet(data_id: str, sql: str) -> pd.DataFrame:
+    """
+    Execute a SQL query against a Domo dataset and return a DataFrame.
+    In testMode: reads local CSV and runs SQL via pandasql.
+    In production: calls the real Domo API endpoint.
+    """
+    if _DOMO_CONFIG["testMode"]:
+        csv_path = _DOMO_CONFIG["csvPath"]
+        print(f"[Domo] testMode=True — reading local CSV: {csv_path}")
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"[Domo] CSV not found at: {csv_path}")
+        domo_data = pd.read_csv(csv_path, low_memory=False)
+        print(f"[Domo] Loaded {len(domo_data):,} rows from local CSV.")
+        result_df = pdsql.sqldf(sql, {"domo_data": domo_data})
+        print(f"[Domo] SQL returned {len(result_df):,} rows.")
+        return result_df
+
+    # Production: real Domo API call
+    print(f"[Domo] Querying live Domo dataset: {data_id}")
+    url = "https://api.domo.com/v1/datasets/query/execute/" + data_id
+    headers = {
+        "Content-Type":  "application/json",
+        "Authorization": "Bearer " + _domo_session,
+    }
+    r = requests.post(url, json={"sql": sql}, headers=headers)
+    r.raise_for_status()
+    response = r.json()
+    df = pd.DataFrame(response["rows"], columns=response["columns"])
+    print(f"[Domo] API returned {len(df):,} rows.")
+    return df
+
 
 # --- TEMPLATES ---
 # Templates define the core, high-priority fields that appear at the top of the embedding text.
@@ -226,23 +368,20 @@ def build_dynamic_embedding_text(row: pd.Series, core_template: str, core_fields
     return "\n".join(text_parts)
 
 
-def process_salesforce_data(file_path: Path) -> List[Dict[str, Any]]:
+def process_salesforce_data() -> List[Dict[str, Any]]:
     """
-    Reads and processes Salesforce data into vector records.
-
-    Args:
-        file_path (Path): Path to the Salesforce Excel file.
+    Fetches and processes Salesforce data from BigQuery into vector records.
 
     Returns:
         List[Dict[str, Any]]: List of dictionary records ready for JSONL output.
     """
-    print(f"\n[Salesforce] Loading data from {file_path}...")
+    print("\n[Salesforce] Starting data fetch from BigQuery...")
     try:
-        df = pd.read_excel(file_path)
+        df = query_salesforce_bq()
     except Exception as e:
-        print(f"Error reading Salesforce file: {e}")
+        print(f"[Salesforce] ERROR fetching data from BigQuery: {e}")
         sys.exit(1)
-        
+
     print(f"[Salesforce] Loaded {len(df)} rows.")
 
     # Pre-calculate derived columns
@@ -283,25 +422,22 @@ def process_salesforce_data(file_path: Path) -> List[Dict[str, Any]]:
     return records
 
 
-def process_domo_data(file_path: Path) -> List[Dict[str, Any]]:
+def process_domo_data() -> List[Dict[str, Any]]:
     """
-    Reads, deduplicates, and processes Domo data into vector records.
-
-    Args:
-        file_path (Path): Path to the Domo Excel/CSV file.
+    Fetches, deduplicates, and processes Domo data into vector records.
+    Uses testMode (local CSV via pandasql) or live Domo API depending on _DOMO_CONFIG.
 
     Returns:
         List[Dict[str, Any]]: List of dictionary records ready for JSONL output.
     """
-    print(f"\n[Domo] Loading data from {file_path}...")
-    
+    print("\n[Domo] Starting data fetch...")
+
+    domoAuthenticate()
+
     try:
-        if file_path.suffix.lower() == '.csv':
-            df = pd.read_csv(file_path)
-        else:
-            df = pd.read_excel(file_path)
+        df = queryDataSet(_DOMO_CONFIG["domoDatasetId"], _DOMO_SQL)
     except Exception as e:
-        print(f"Error reading Domo file: {e}")
+        print(f"[Domo] ERROR fetching data: {e}")
         sys.exit(1)
 
     print(f"[Domo] Loaded {len(df)} rows.")
@@ -385,13 +521,11 @@ def main():
     print("=" * 80)
 
     # Paths
-    sf_file = config.DATA_DIR / config.SALESFORCE_FILE
-    domo_file = config.DATA_DIR / config.DOMO_FILE
     output_file = Path("nexus_vectors_input.jsonl")
 
     # Processing
-    salesforce_records = process_salesforce_data(sf_file)
-    domo_records = process_domo_data(domo_file)
+    salesforce_records = process_salesforce_data()
+    domo_records = process_domo_data()
 
     # Combine and Save
     all_records = salesforce_records + domo_records

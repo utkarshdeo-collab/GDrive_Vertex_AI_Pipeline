@@ -214,10 +214,10 @@ def run_phase_2():
 
     # 3. Upload to GCS
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    gcs_blob = f"{config.GCS_EMBEDDINGS_PREFIX}/{timestamp}/final/nexus_vectors_output.jsonl"
+    gcs_blob = f"{config.NEXUS_GCS_EMBEDDINGS_PREFIX}/{timestamp}/final/nexus_vectors_output.jsonl"
     
     try:
-        gcs_uri = upload_to_gcs(output_file, config.GCS_BUCKET_NAME, gcs_blob)
+        gcs_uri = upload_to_gcs(output_file, config.NEXUS_GCS_BUCKET, gcs_blob)
         print("\n" + "="*80)
         print("PHASE 2 COMPLETE")
         print(f"Vector data available at: {gcs_uri}")

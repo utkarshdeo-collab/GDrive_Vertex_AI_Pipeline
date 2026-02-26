@@ -170,7 +170,7 @@ if __name__ == "__main__":
 
     splitter = GCSRecordSplitter(
         project_id=config.PROJECT_ID,
-        bucket_name=config.GCS_BUCKET_NAME,
+        bucket_name=config.NEXUS_GCS_BUCKET,
         source_file=INPUT_FILE,
         destination_prefix=TARGET_PREFIX,
         max_workers=50  # Adjust based on bandwidth

@@ -10,6 +10,13 @@ google-cloud-aiplatform>=1.35.0
 # Phase 4 ADK (Agent Development Kit)
 google-adk>=1.5.0
 
+# Nexus Phase 1 — Salesforce BigQuery fetch
+google-cloud-bigquery>=3.0.0
+pandas-gbq>=0.19.0
+
+# Nexus Phase 1 — Domo testMode (local CSV SQL)
+pandasql>=0.7.3
+
 # Optional: local-only Phase 1 fallback (phase1_local_ingest.py)
 # PyMuPDF>=1.23.0
 # pdfplumber>=0.10.0
